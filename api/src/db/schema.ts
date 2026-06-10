@@ -29,8 +29,16 @@ export interface PaginationParams {
   offset: number;
 }
 
+export interface ImportLog {
+  action: "imported" | "skipped";
+  title: string;
+  url: string;
+  reason?: string;
+}
+
 export interface ImportResult {
   imported: number;
   skipped: number;
   warnings: string[];
+  logs: ImportLog[];
 }

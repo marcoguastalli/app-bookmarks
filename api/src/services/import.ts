@@ -1,7 +1,7 @@
 import { parse } from "node-html-parser";
 import type { Sql } from "postgres";
 import { normalizeUrl } from "../utils/normalize.js";
-import type { ImportResult } from "../db/schema.js";
+import type { ImportResult, ImportLog } from "../db/schema.js";
 
 interface ParsedBookmark {
   type: "bookmark";
@@ -54,9 +54,7 @@ function parseDL(dlNode: any): ParsedItem[] {
         const href = (a.getAttribute("href") ?? "").trim();
         const title =
           ((a.innerText ?? a.rawText ?? "").trim()) || href || "Untitled";
-        if (href) {
-          items.push({ type: "bookmark", title, url: href });
-        }
+        items.push({ type: "bookmark", title: title || href || "Untitled", url: href });
       }
     }
   }
@@ -97,14 +95,23 @@ async function importItems(
 ): Promise<void> {
   for (const item of items) {
     if (item.type === "bookmark") {
+      if (!item.url) {
+        const msg = `Missing URL`;
+        result.skipped++;
+        result.warnings.push(`Skipped "${item.title}": ${msg}`);
+        result.logs.push({ action: "skipped", title: item.title, url: "", reason: msg });
+        continue;
+      }
       const normalized = normalizeUrl(item.url);
       try {
         const [existing] = await sql`
           SELECT id FROM bookmarks WHERE normalized_url = ${normalized} AND folder_id = ${targetFolderId}
         `;
         if (existing) {
+          const msg = "Duplicate URL in this folder";
           result.skipped++;
           result.warnings.push(`Skipped duplicate: ${item.url}`);
+          result.logs.push({ action: "skipped", title: item.title, url: item.url, reason: msg });
           continue;
         }
         if (!dryRun) {
@@ -115,9 +122,12 @@ async function importItems(
           `;
         }
         result.imported++;
+        result.logs.push({ action: "imported", title: item.title, url: item.url });
       } catch (err: any) {
+        const msg = err.message;
         result.skipped++;
-        result.warnings.push(`Error importing ${item.url}: ${err.message}`);
+        result.warnings.push(`Error importing ${item.url}: ${msg}`);
+        result.logs.push({ action: "skipped", title: item.title, url: item.url, reason: `Error: ${msg}` });
       }
     } else if (item.type === "folder") {
       let folderId: string;
@@ -147,7 +157,7 @@ export async function importBookmarks(
   sql: Sql
 ): Promise<ImportResult> {
   const items = parseNetscapeHtml(html);
-  const result: ImportResult = { imported: 0, skipped: 0, warnings: [] };
+  const result: ImportResult = { imported: 0, skipped: 0, warnings: [], logs: [] };
 
   if (dryRun) {
     await importItems(sql, items, targetFolderId, true, result);

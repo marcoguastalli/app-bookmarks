@@ -29,11 +29,19 @@ export interface PaginatedResponse<T> {
   total: number;
 }
 
+export interface ImportLog {
+  action: "imported" | "skipped";
+  title: string;
+  url: string;
+  reason?: string;
+}
+
 export interface ImportResult {
   dry_run: boolean;
   imported: number;
   skipped: number;
   warnings: string[];
+  logs: ImportLog[];
 }
 
 export interface ApiError {

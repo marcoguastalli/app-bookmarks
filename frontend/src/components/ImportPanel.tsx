@@ -1,7 +1,7 @@
 import React, { useState, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client.js";
-import type { FolderTree, ImportResult } from "../types/index.js";
+import type { FolderTree, ImportResult, ImportLog } from "../types/index.js";
 
 interface Props {
   onClose: () => void;
@@ -118,22 +118,45 @@ export function ImportPanel({ onClose }: Props) {
       </label>
 
       {result && (
-        <div className={`p-4 rounded-md border ${dryRun ? "bg-blue-50 border-blue-200" : "bg-green-50 border-green-200"}`}>
-          <h3 className={`text-sm font-semibold mb-2 ${dryRun ? "text-blue-800" : "text-green-800"}`}>
-            {dryRun ? "Dry run result" : "Import complete"}
-          </h3>
-          <div className="text-sm space-y-1">
-            <p className="text-gray-700"><span className="font-medium">{result.imported}</span> items would be imported</p>
-            <p className="text-gray-700"><span className="font-medium">{result.skipped}</span> duplicates skipped</p>
+        <div className={`rounded-md border ${dryRun ? "bg-blue-50 border-blue-200" : "bg-green-50 border-green-200"}`}>
+          <div className="px-4 pt-4 pb-3">
+            <h3 className={`text-sm font-semibold mb-2 ${dryRun ? "text-blue-800" : "text-green-800"}`}>
+              {dryRun ? "Dry run preview" : "Import complete"}
+            </h3>
+            <div className="flex gap-4 text-sm">
+              <span className="text-gray-700"><span className="font-semibold text-green-700">{result.imported}</span> imported</span>
+              <span className="text-gray-700"><span className="font-semibold text-amber-600">{result.skipped}</span> skipped</span>
+              <span className="text-gray-700"><span className="font-semibold text-gray-600">{result.logs.length}</span> total</span>
+            </div>
           </div>
-          {result.warnings.length > 0 && (
-            <div className="mt-3">
-              <p className="text-xs font-medium text-amber-700 mb-1">Warnings:</p>
-              <ul className="text-xs text-amber-700 space-y-0.5 max-h-32 overflow-y-auto">
-                {result.warnings.map((w, i) => (
-                  <li key={i} className="truncate">{w}</li>
-                ))}
-              </ul>
+          {result.logs.length > 0 && (
+            <div className="border-t border-current border-opacity-10">
+              <div className="max-h-64 overflow-y-auto">
+                <table className="w-full text-xs">
+                  <thead className="sticky top-0 bg-white bg-opacity-80">
+                    <tr className="text-left text-gray-500 border-b">
+                      <th className="px-3 py-1.5 font-medium w-20">Status</th>
+                      <th className="px-3 py-1.5 font-medium">Title</th>
+                      <th className="px-3 py-1.5 font-medium">URL</th>
+                      <th className="px-3 py-1.5 font-medium">Reason</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {result.logs.map((log: ImportLog, i: number) => (
+                      <tr key={i} className={`border-b border-gray-100 ${log.action === "skipped" ? "bg-amber-50" : ""}`}>
+                        <td className="px-3 py-1.5">
+                          <span className={`font-medium ${log.action === "imported" ? "text-green-700" : "text-amber-600"}`}>
+                            {log.action}
+                          </span>
+                        </td>
+                        <td className="px-3 py-1.5 max-w-[160px] truncate text-gray-700" title={log.title}>{log.title}</td>
+                        <td className="px-3 py-1.5 max-w-[200px] truncate text-gray-500" title={log.url}>{log.url}</td>
+                        <td className="px-3 py-1.5 text-gray-400">{log.reason ?? ""}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
         </div>

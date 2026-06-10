@@ -10,6 +10,7 @@ import { foldersRouter } from "./routes/folders.js";
 import { bookmarksRouter } from "./routes/bookmarks.js";
 import { exportRouter } from "./routes/export.js";
 import { importRouter } from "./routes/import.js";
+import { adminRouter } from "./routes/admin.js";
 
 export const app = new OpenAPIHono();
 
@@ -25,6 +26,7 @@ app.route("/folders", foldersRouter);
 app.route("/bookmarks", bookmarksRouter);
 app.route("/export", exportRouter);
 app.route("/import", importRouter);
+app.route("/admin", adminRouter);
 
 // OpenAPI spec + Swagger UI
 app.doc("/openapi.json", {
