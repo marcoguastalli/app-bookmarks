@@ -1,4 +1,3 @@
-import { parse } from "node-html-parser";
 import type { Sql } from "postgres";
 import { normalizeUrl } from "../utils/normalize.js";
 import type { ImportResult, ImportLog } from "../db/schema.js";
@@ -17,57 +16,61 @@ interface ParsedFolder {
 
 type ParsedItem = ParsedBookmark | ParsedFolder;
 
-function parseDL(dlNode: any): ParsedItem[] {
+type Token =
+  | { type: "open" }
+  | { type: "close" }
+  | { type: "folder"; name: string }
+  | { type: "bookmark"; url: string; title: string };
+
+function tokenize(html: string): Token[] {
+  const tokens: Token[] = [];
+  for (const raw of html.split("\n")) {
+    const line = raw.trim();
+    if (!line) continue;
+
+    if (/^<DL/i.test(line)) {
+      tokens.push({ type: "open" });
+    } else if (/^<\/DL/i.test(line)) {
+      tokens.push({ type: "close" });
+    } else if (/^<DT><H3/i.test(line)) {
+      const m = line.match(/<H3[^>]*>([^<]*)<\/H3>/i);
+      tokens.push({ type: "folder", name: (m?.[1] ?? "Untitled").trim() || "Untitled" });
+    } else if (/^<DT><A\s/i.test(line)) {
+      const href = line.match(/HREF="([^"]*)"/i)?.[1] ?? "";
+      const title = line.match(/<A[^>]*>([^<]*)<\/A>/i)?.[1]?.trim() ?? "";
+      if (href) tokens.push({ type: "bookmark", url: href, title: title || href });
+    }
+  }
+  return tokens;
+}
+
+function buildTree(tokens: Token[], pos: number): { items: ParsedItem[]; pos: number } {
   const items: ParsedItem[] = [];
-  const children = dlNode.childNodes ?? [];
-
-  for (let i = 0; i < children.length; i++) {
-    const child = children[i];
-    if (child.nodeType !== 1) continue;
-    const tag = child.tagName?.toUpperCase();
-
-    if (tag === "DT") {
-      const h3 = child.querySelector("h3") ?? child.querySelector("H3");
-      const a = child.querySelector("a") ?? child.querySelector("A");
-
-      if (h3) {
-        const folder: ParsedFolder = {
-          type: "folder",
-          name: (h3.innerText ?? h3.rawText ?? "Untitled").trim() || "Untitled",
-          children: [],
-        };
-        // Find the next DL sibling
-        let j = i + 1;
-        while (j < children.length) {
-          const sib = children[j];
-          if (sib.nodeType === 1) {
-            if (sib.tagName?.toUpperCase() === "DL") {
-              folder.children = parseDL(sib);
-              i = j;
-            }
-            break;
-          }
-          j++;
-        }
-        items.push(folder);
-      } else if (a) {
-        const href = (a.getAttribute("href") ?? "").trim();
-        const title =
-          ((a.innerText ?? a.rawText ?? "").trim()) || href || "Untitled";
-        items.push({ type: "bookmark", title: title || href || "Untitled", url: href });
+  while (pos < tokens.length) {
+    const tok = tokens[pos];
+    if (tok.type === "close") return { items, pos: pos + 1 };
+    pos++;
+    if (tok.type === "bookmark") {
+      items.push({ type: "bookmark", url: tok.url, title: tok.title });
+    } else if (tok.type === "folder") {
+      if (pos < tokens.length && tokens[pos].type === "open") {
+        const sub = buildTree(tokens, pos + 1);
+        items.push({ type: "folder", name: tok.name, children: sub.items });
+        pos = sub.pos;
+      } else {
+        items.push({ type: "folder", name: tok.name, children: [] });
       }
     }
   }
-
-  return items;
+  return { items, pos };
 }
 
 export function parseNetscapeHtml(html: string): ParsedItem[] {
   try {
-    const root = parse(html, { lowerCaseTagName: false, comment: false });
-    const dl = root.querySelector("DL") ?? root.querySelector("dl");
-    if (!dl) return [];
-    return parseDL(dl);
+    const tokens = tokenize(html);
+    // skip the root <DL> open token
+    const start = tokens[0]?.type === "open" ? 1 : 0;
+    return buildTree(tokens, start).items;
   } catch {
     return [];
   }

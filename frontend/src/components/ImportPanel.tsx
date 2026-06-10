@@ -62,6 +62,7 @@ export function ImportPanel({ onClose }: Props) {
       if (!dryRun) {
         qc.invalidateQueries({ queryKey: ["bookmarks"] });
         qc.invalidateQueries({ queryKey: ["folders"] });
+        setTimeout(onClose, 1500);
       }
     } catch {
       setError("Import failed. Please try again.");
