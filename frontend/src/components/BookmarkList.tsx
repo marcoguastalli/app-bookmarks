@@ -45,8 +45,15 @@ export function BookmarkList({ folderId, folderName }: Props) {
   const total = data?.total ?? 0;
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
-  const getFaviconSrc = (b: Bookmark) =>
-    b.favicon_url ?? `https://www.google.com/s2/favicons?domain=${new URL(b.url.startsWith("http") ? b.url : `https://${b.url}`).hostname}&sz=16`;
+  const getFaviconSrc = (b: Bookmark): string | undefined => {
+    if (b.favicon_url) return b.favicon_url;
+    try {
+      const url = new URL(b.url.startsWith("http") ? b.url : `https://${b.url}`);
+      return `https://www.google.com/s2/favicons?domain=${url.hostname}&sz=16`;
+    } catch {
+      return undefined;
+    }
+  };
 
   return (
     <div className="flex flex-col h-full">
@@ -96,12 +103,14 @@ export function BookmarkList({ folderId, folderName }: Props) {
             key={b.id}
             className="group flex items-start gap-3 px-6 py-3 border-b border-gray-50 hover:bg-gray-50"
           >
-            <img
-              src={getFaviconSrc(b)}
-              alt=""
-              className="w-4 h-4 mt-1 flex-shrink-0 rounded"
-              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-            />
+            {getFaviconSrc(b) && (
+              <img
+                src={getFaviconSrc(b)}
+                alt=""
+                className="w-4 h-4 mt-1 flex-shrink-0 rounded"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+              />
+            )}
             <div className="flex-1 min-w-0">
               <a
                 href={b.url}

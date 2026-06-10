@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "bun:test";
 import { setupTestDb, cleanTestDb, teardownTestDb, testSql } from "../setup.js";
-import app from "../../src/index.js";
+import { app } from "../../src/index.js";
 
 beforeAll(async () => {
   await setupTestDb();

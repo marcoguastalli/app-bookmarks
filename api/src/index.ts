@@ -57,5 +57,3 @@ if (import.meta.main) {
 
   Bun.serve({ port: env.PORT, fetch: app.fetch });
 }
-
-export default app;
