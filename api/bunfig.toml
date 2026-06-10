@@ -1,0 +1,4 @@
+[test]
+# Load .env.test when running bun test
+# Copy .env.test.example to .env.test and set your test database URL
+env-file = ".env.test"

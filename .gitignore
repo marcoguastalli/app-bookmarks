@@ -1,0 +1,30 @@
+# AI
+.claude
+.agents
+
+# Environment files (never commit these)
+.env
+.env.local
+.env.development
+.env.production
+.env.test
+
+# Docker data volumes
+postgres-data/
+pgadmin-data/
+
+# Dependencies
+node_modules/
+api/node_modules/
+frontend/node_modules/
+
+# Build output
+frontend/dist/
+
+# Test output
+frontend/playwright-report/
+frontend/test-results/
+
+# Misc
+.DS_Store
+*.log
