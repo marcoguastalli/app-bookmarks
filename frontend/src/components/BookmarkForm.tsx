@@ -75,6 +75,12 @@ export function BookmarkForm({ bookmark, defaultFolderId, onClose }: Props) {
           rows={3}
         />
       </div>
+      {bookmark && (
+        <div className="grid grid-cols-2 gap-x-4 text-xs text-gray-400 pt-1">
+          <span>Created: {new Date(bookmark.created_at).toLocaleString()}</span>
+          <span>Updated: {new Date(bookmark.updated_at).toLocaleString()}</span>
+        </div>
+      )}
       <div className="flex justify-end gap-2 pt-2">
         <button
           type="button"
