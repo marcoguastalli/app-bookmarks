@@ -108,7 +108,7 @@ Edit `.env` if you want to change default credentials:
 
 ```dotenv
 POSTGRES_USER=postgres
-POSTGRES_PASSWORD=admin123four
+POSTGRES_PASSWORD=CHANGE_ME
 POSTGRES_DB=bookmarks
 ```
 
@@ -160,7 +160,7 @@ bun install
 # Copy and edit env file
 cp .env.example .env
 # Set DATABASE_URL to point at your running postgres:
-# DATABASE_URL=postgresql://postgres:admin123four@localhost:5432/bookmarks
+# DATABASE_URL=postgresql://postgres:CHANGE_ME@localhost:5432/bookmarks
 
 # Start postgres only (needed for local dev)
 docker compose up postgres -d
@@ -319,10 +319,10 @@ npx playwright show-report
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `POSTGRES_USER` | `postgres` | PostgreSQL user |
-| `POSTGRES_PASSWORD` | `admin123four` | PostgreSQL password |
+| `POSTGRES_PASSWORD` | `CHANGE_ME` | PostgreSQL password |
 | `POSTGRES_DB` | `bookmarks` | Database name |
 | `PGADMIN_DEFAULT_EMAIL` | `pgadmin4@pgadmin.org` | pgAdmin login email |
-| `PGADMIN_DEFAULT_PASSWORD` | `admin123four` | pgAdmin login password |
+| `PGADMIN_DEFAULT_PASSWORD` | `CHANGE_ME` | pgAdmin login password |
 | `PGADMIN_PORT` | `5050` | pgAdmin host port |
 | `NODE_ENV` | `production` | API environment |
 | `MAX_FOLDER_DEPTH` | `10` | Maximum folder nesting depth |
@@ -343,7 +343,7 @@ npx playwright show-report
 Copy from `api/.env.test.example` and set `DATABASE_URL` to a test database:
 
 ```dotenv
-DATABASE_URL=postgresql://postgres:admin123four@localhost:5432/bookmarks_test
+DATABASE_URL=postgresql://postgres:CHANGE_ME@localhost:5432/bookmarks_test
 PORT=3001
 NODE_ENV=test
 MAX_FOLDER_DEPTH=10
@@ -442,10 +442,10 @@ pgAdmin is available at `http://localhost:5050`.
 
 Default credentials:
 - **Email:** `pgadmin4@pgadmin.org`
-- **Password:** `admin123four`
+- **Password:** `CHANGE_ME`
 
 To connect to the database, add a new server with:
 - **Host:** `postgres`
 - **Port:** `5432`
 - **Username:** `postgres`
-- **Password:** `admin123four`
+- **Password:** `CHANGE_ME`
