@@ -37,6 +37,90 @@ docker-compose up
 
 Wait for health checks to pass (~15–30 seconds). Frontend loads once API is ready.
 
+## Running from Published Images (GHCR)
+
+`docker-compose up --build` builds the `api` and `frontend` images locally. To run
+**pre-built images** instead, pull them from GitHub Container Registry. CI publishes
+two images on every push to `main` (and on `v*` tags) — see
+[`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml):
+
+| Image | Registry path |
+|-------|---------------|
+| **API** | `ghcr.io/marcoguastalli/app-bookmarks-api` |
+| **Frontend** | `ghcr.io/marcoguastalli/app-bookmarks-frontend` |
+
+Tags: `latest` (default branch), `main`, `sha-<commit>`, and `1.2.3` / `1.2` for `v*` tags.
+
+> **Not a single-container app.** Unlike the Carousel project (one self-contained
+> nginx image you can `docker run` directly), this app is a 4-service stack —
+> postgres + api + frontend + nginx — that must share a network. So there is no
+> single `docker run` equivalent; use Compose. Likewise there is no host
+> image-volume to mount: the only persistent state is the Postgres database, which
+> lives in the named `postgres-data` volume.
+
+Save this as `docker-compose.ghcr.yml` and run `docker compose -f docker-compose.ghcr.yml up -d`:
+
+```yaml
+services:
+  postgres:
+    image: postgres:17.8-alpine3.23
+    restart: unless-stopped
+    volumes:
+      - postgres-data:/var/lib/postgresql/data:rw
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-CHANGE_ME}
+      POSTGRES_DB: ${POSTGRES_DB:-bookmarks}
+    networks: [app-network]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-bookmarks}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    image: ghcr.io/marcoguastalli/app-bookmarks-api:latest
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-CHANGE_ME}@postgres:5432/${POSTGRES_DB:-bookmarks}
+      PORT: 3000
+      NODE_ENV: ${NODE_ENV:-production}
+    networks: [app-network]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    image: ghcr.io/marcoguastalli/app-bookmarks-frontend:latest
+    restart: unless-stopped
+    networks: [app-network]
+
+  nginx:
+    image: nginx:1.26.3-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    networks: [app-network]
+    depends_on:
+      - api
+      - frontend
+
+volumes:
+  postgres-data:
+
+networks:
+  app-network:
+    driver: bridge
+```
+
+If the packages are **private**, authenticate first:
+`echo <token> | docker login ghcr.io -u marcoguastalli --password-stdin`.
+
+To persist the database on the host instead of a named volume, swap the postgres
+`volumes:` entry for a bind-mount, e.g. `- "/Users/Marco.Guastalli/bookmarks-data:/var/lib/postgresql/data:rw"`.
+
 ## Environment Variables
 
 Create `.env` from `.env.example`:
