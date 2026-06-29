@@ -1,11 +1,15 @@
+# syntax=docker/dockerfile:1
+
 FROM oven/bun:1.2.5-alpine
 
 WORKDIR /app
 
 COPY package.json bun.lock* ./
-RUN bun install --production
+RUN bun install --frozen-lockfile --production
 
-COPY . .
+COPY src ./src
+
+USER bun
 
 EXPOSE 3000
 
