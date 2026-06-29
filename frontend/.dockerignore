@@ -1,0 +1,14 @@
+node_modules
+dist
+.git
+.github
+*.log
+*.env
+.env.local
+.DS_Store
+.vscode
+.idea
+tests
+playwright
+coverage
+.turbo
