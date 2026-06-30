@@ -119,7 +119,45 @@ If the packages are **private**, authenticate first:
 `echo <token> | docker login ghcr.io -u marcoguastalli --password-stdin`.
 
 To persist the database on the host instead of a named volume, swap the postgres
-`volumes:` entry for a bind-mount, e.g. `- "/Users/Marco.Guastalli/bookmarks-data:/var/lib/postgresql/data:rw"`.
+`volumes:` entry for a bind-mount, e.g. `- "~/bookmarks-data:/var/lib/postgresql/data:rw"`.
+
+## Publishing Images (`release.sh`)
+
+CI publishes on every push to `main` and on `v*` tags. To **publish a versioned
+release manually** — e.g. cut a build from your machine without pushing a tag —
+use [`release.sh`](release.sh) at the repo root. It builds the `api` and
+`frontend` images, tags each with a **version + `latest`**, and pushes a
+**multi-arch manifest (amd64 + arm64)** so the images pull on both Apple Silicon
+and x86 hosts.
+
+```bash
+# 1. Log in — pushing needs a PAT with `write:packages`
+echo <PAT> | docker login ghcr.io -u marcoguastalli --password-stdin
+
+# 2. Release
+./release.sh              # version each image from its own package.json (default)
+./release.sh 1.2.3        # force version 1.2.3 for both images
+./release.sh --sha        # version = git short SHA (immutable, traceable)
+./release.sh --tag        # version = `git describe --tags`
+./release.sh api 1.2.3    # only the api image, at 1.2.3
+./release.sh --no-push    # build locally only (single-arch, loads into docker)
+./release.sh --no-latest  # push the version tag only, leave `latest` untouched
+./release.sh --help       # full usage
+```
+
+**Cutting a version:** bump `version` in `api/package.json` and/or
+`frontend/package.json`, then run `./release.sh` (versions are read per-component
+from each `package.json`). Or skip the edit and pass an explicit version, e.g.
+`./release.sh 1.3.0`.
+
+Notes:
+- The first `--push` run creates a one-time `docker-container` buildx builder
+  named `bookmarks-builder` (required for multi-arch). It's reused afterwards.
+- `--no-push` produces a **single-arch** local image (your host's arch) — buildx
+  cannot `--load` a multi-arch manifest into the local daemon. Fine for local
+  testing; use the default push for releases.
+- Your `gh` CLI token (`repo`, `read:org`) is **not** enough to push — mint a
+  classic PAT with `write:packages` for `docker login`.
 
 ## Environment Variables
 
