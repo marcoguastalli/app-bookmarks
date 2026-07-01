@@ -23,11 +23,12 @@ export function BookmarkList({ folderId, folderName }: Props) {
   const { data, isLoading } = useQuery<PaginatedResponse<Bookmark>>({
     queryKey: ["bookmarks", folderId, page, search],
     queryFn: () => {
+      // When searching, search globally across all folders (omit folder_id);
+      // otherwise scope the list to the selected folder.
       const params = new URLSearchParams({
-        folder_id: folderId,
         limit: String(PAGE_SIZE),
         offset: String(page * PAGE_SIZE),
-        ...(search ? { q: search } : {}),
+        ...(search ? { q: search } : { folder_id: folderId }),
       });
       return api.get(`/bookmarks?${params}`);
     },
