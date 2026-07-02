@@ -4,10 +4,12 @@ A self-hosted bookmark manager with PostgreSQL backend, React frontend, and REST
 
 **Key Features:**
 - CRUD operations for bookmarks and folders (nested support)
+- Global search across all folders (matches title and URL)
 - Export to Netscape Bookmark Format (importable in Chrome, Firefox, Safari)
 - Import bookmarks from browsers
 - Bookmark deduplication
 - Full Docker orchestration
+- Multi-arch container images (linux/amd64 + linux/arm64)
 
 ## Tech Stack
 
@@ -50,6 +52,10 @@ two images on every push to `main` (and on `v*` tags) — see
 | **Frontend** | `ghcr.io/marcoguastalli/app-bookmarks-frontend` |
 
 Tags: `latest` (default branch), `main`, `sha-<commit>`, and `1.2.3` / `1.2` for `v*` tags.
+Images are **multi-arch** (linux/amd64 + linux/arm64), so they pull natively on
+both x86 and Apple Silicon — no `--platform` flag needed. The current released
+version is **`1.0.0`** (git tag `v1.0.0`); pin to it in production instead of
+`latest`, e.g. `ghcr.io/marcoguastalli/app-bookmarks-api:1.0.0`.
 
 > **Not a single-container app.** Unlike the Carousel project (one self-contained
 > nginx image you can `docker run` directly), this app is a 4-service stack —
@@ -115,8 +121,15 @@ networks:
     driver: bridge
 ```
 
-If the packages are **private**, authenticate first:
-`echo <token> | docker login ghcr.io -u marcoguastalli --password-stdin`.
+These packages are currently **private**, so you must authenticate before pulling.
+Use a classic PAT with the `read:packages` scope (a plain `gh` CLI token with
+`repo`/`read:org` is **not** enough):
+
+```bash
+echo <PAT-with-read:packages> | docker login ghcr.io -u marcoguastalli --password-stdin
+docker pull ghcr.io/marcoguastalli/app-bookmarks-api:1.0.0
+docker pull ghcr.io/marcoguastalli/app-bookmarks-frontend:1.0.0
+```
 
 To persist the database on the host instead of a named volume, swap the postgres
 `volumes:` entry for a bind-mount, e.g. `- "~/bookmarks-data:/var/lib/postgresql/data:rw"`.
