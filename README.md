@@ -1,5 +1,13 @@
 # Bookmarks App — Self-Hosted Docker Setup (single-image / no nginx)
 
+> ⚠️ **This is the `no-nginx` branch — a permanently separate release line.**
+> It ships **one** container image (`app-bookmarks`, SPA + API in a single
+> Bun/Hono process) and is **not merged into `main`**. `main` keeps the original
+> **two-image + nginx** architecture (`app-bookmarks-api` + `app-bookmarks-frontend`
+> behind an nginx reverse proxy). The two lines are maintained independently and
+> published as distinct GHCR images — see [Tech Stack](#tech-stack) and
+> [Migration: dropping nginx](#migration-dropping-nginx-what-changed-on-this-branch).
+
 A self-hosted bookmark manager with a PostgreSQL backend, React frontend, and a
 REST API built with Hono. **This branch (`no-nginx`) ships a single container
 image** — one Bun/Hono process serves both the SPA and the API. The separate
