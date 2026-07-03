@@ -8,6 +8,8 @@ const envSchema = z.object({
     .default("development"),
   MAX_FOLDER_DEPTH: z.coerce.number().int().min(1).max(100).default(10),
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
+  // Directory of the built frontend to serve (single-image deployment).
+  PUBLIC_DIR: z.string().default("./public"),
 });
 
 export type Env = z.infer<typeof envSchema>;
