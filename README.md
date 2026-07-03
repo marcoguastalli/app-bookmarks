@@ -1,6 +1,9 @@
-# Bookmarks App — Self-Hosted Docker Setup
+# Bookmarks App — Self-Hosted Docker Setup (single-image / no nginx)
 
-A self-hosted bookmark manager with PostgreSQL backend, React frontend, and REST API built with Hono.
+A self-hosted bookmark manager with a PostgreSQL backend, React frontend, and a
+REST API built with Hono. **This branch (`no-nginx`) ships a single container
+image** — one Bun/Hono process serves both the SPA and the API. The separate
+frontend image and the nginx reverse proxy are gone.
 
 **Key Features:**
 - CRUD operations for bookmarks and folders (nested support)
@@ -8,18 +11,20 @@ A self-hosted bookmark manager with PostgreSQL backend, React frontend, and REST
 - Export to Netscape Bookmark Format (importable in Chrome, Firefox, Safari)
 - Import bookmarks from browsers
 - Bookmark deduplication
-- Full Docker orchestration
-- Multi-arch container images (linux/amd64 + linux/arm64)
+- **Single-image deployment** — SPA + API in one container (no nginx)
+- Multi-arch container image (linux/amd64 + linux/arm64)
 
 ## Tech Stack
 
 | Layer | Technology | Image |
 |-------|-----------|-------|
-| **API** | Hono (TypeScript) + Bun | `oven/bun:1.2.5-alpine` |
+| **App (SPA + API)** | Hono (TypeScript) + Bun serving the built React SPA | `oven/bun:1.2.5-alpine` |
 | **Database** | PostgreSQL 17 | `postgres:17.8-alpine3.23` |
-| **Frontend** | React 18 + TypeScript + Vite | `oven/bun:1.2.5-alpine` (build) → `nginx:1.26.3-alpine` (runtime) |
-| **Reverse Proxy** | Nginx | `nginx:1.26.3-alpine` |
+| **Frontend build** | React 18 + TypeScript + Vite | `oven/bun:1.2.5-alpine` (build stage) |
 | **Admin UI** | pgAdmin 4 | `dpage/pgadmin4:9.12.0` (dev only) |
+
+There is **no** `nginx` service and **no** standalone frontend image — the Vite
+`dist/` bundle is copied into the app image at build time and served by Hono.
 
 ## Quick Start
 
@@ -28,41 +33,44 @@ A self-hosted bookmark manager with PostgreSQL backend, React frontend, and REST
 cp .env.example .env
 # Edit .env, change POSTGRES_PASSWORD at minimum
 
-# 2. Start all services
-docker-compose up
+# 2. Start all services (builds the single app-bookmarks image)
+docker compose up --build
 
 # 3. Access the app
-# Frontend:  http://localhost
-# API:       http://localhost/api
-# pgAdmin:   http://localhost:5050 (dev only)
+# App (SPA):  http://localhost
+# API:        http://localhost/api
+# Swagger:    http://localhost/api/docs
+# pgAdmin:    http://localhost:5050 (dev only)
 ```
 
-Wait for health checks to pass (~15–30 seconds). Frontend loads once API is ready.
+Wait for the health check to pass (~15–30 seconds).
 
-## Running from Published Images (GHCR)
+## Running from the Published Image (GHCR)
 
-`docker-compose up --build` builds the `api` and `frontend` images locally. To run
-**pre-built images** instead, pull them from GitHub Container Registry. CI publishes
-two images on every push to `main` (and on `v*` tags) — see
-[`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml):
+`docker compose up --build` builds the `app-bookmarks` image locally. To run the
+**pre-built image** instead, pull it from GitHub Container Registry. CI publishes
+it on `v*` tags — see [`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml):
 
-| Image | Registry path |
-|-------|---------------|
-| **API** | `ghcr.io/marcoguastalli/app-bookmarks-api` |
-| **Frontend** | `ghcr.io/marcoguastalli/app-bookmarks-frontend` |
+| Image | Registry path | Visibility |
+|-------|---------------|------------|
+| **App (this branch)** | `ghcr.io/marcoguastalli/app-bookmarks` | public |
+| API (main branch) | `ghcr.io/marcoguastalli/app-bookmarks-api` | public |
+| Frontend (main branch) | `ghcr.io/marcoguastalli/app-bookmarks-frontend` | public |
 
-Tags: `latest` (default branch), `main`, `sha-<commit>`, and `1.2.3` / `1.2` for `v*` tags.
-Images are **multi-arch** (linux/amd64 + linux/arm64), so they pull natively on
-both x86 and Apple Silicon — no `--platform` flag needed. The current released
-version is **`1.0.0`** (git tag `v1.0.0`); pin to it in production instead of
-`latest`, e.g. `ghcr.io/marcoguastalli/app-bookmarks-api:1.0.0`.
+Tags for the single image: `latest`, `1.0.0-no-nginx` (first release), and
+`sha-<commit>`. The image is **multi-arch** (linux/amd64 + linux/arm64), so it
+pulls natively on both x86 and Apple Silicon — no `--platform` flag needed. Pin a
+version in production instead of `latest`:
 
-> **Not a single-container app.** Unlike the Carousel project (one self-contained
-> nginx image you can `docker run` directly), this app is a 4-service stack —
-> postgres + api + frontend + nginx — that must share a network. So there is no
-> single `docker run` equivalent; use Compose. Likewise there is no host
-> image-volume to mount: the only persistent state is the Postgres database, which
-> lives in the named `postgres-data` volume.
+```bash
+docker pull ghcr.io/marcoguastalli/app-bookmarks:1.0.0-no-nginx
+```
+
+The packages are **public** — no `docker login` needed to pull.
+
+> **Two services, not four.** Because the SPA and API share one image, the stack
+> is just **postgres + app** (pgAdmin is dev-only). The only persistent state is
+> the Postgres database in the named `postgres-data` volume.
 
 Save this as `docker-compose.ghcr.yml` and run `docker compose -f docker-compose.ghcr.yml up -d`:
 
@@ -84,34 +92,19 @@ services:
       timeout: 5s
       retries: 5
 
-  api:
-    image: ghcr.io/marcoguastalli/app-bookmarks-api:latest
+  app:
+    image: ghcr.io/marcoguastalli/app-bookmarks:1.0.0-no-nginx
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-CHANGE_ME}@postgres:5432/${POSTGRES_DB:-bookmarks}
       PORT: 3000
       NODE_ENV: ${NODE_ENV:-production}
+    ports:
+      - "80:3000"
     networks: [app-network]
     depends_on:
       postgres:
         condition: service_healthy
-
-  frontend:
-    image: ghcr.io/marcoguastalli/app-bookmarks-frontend:latest
-    restart: unless-stopped
-    networks: [app-network]
-
-  nginx:
-    image: nginx:1.26.3-alpine
-    restart: unless-stopped
-    ports:
-      - "80:80"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-    networks: [app-network]
-    depends_on:
-      - api
-      - frontend
 
 volumes:
   postgres-data:
@@ -121,56 +114,74 @@ networks:
     driver: bridge
 ```
 
-These packages are currently **private**, so you must authenticate before pulling.
-Use a classic PAT with the `read:packages` scope (a plain `gh` CLI token with
-`repo`/`read:org` is **not** enough):
-
-```bash
-echo <PAT-with-read:packages> | docker login ghcr.io -u marcoguastalli --password-stdin
-docker pull ghcr.io/marcoguastalli/app-bookmarks-api:1.0.0
-docker pull ghcr.io/marcoguastalli/app-bookmarks-frontend:1.0.0
-```
-
 To persist the database on the host instead of a named volume, swap the postgres
 `volumes:` entry for a bind-mount, e.g. `- "~/bookmarks-data:/var/lib/postgresql/data:rw"`.
 
-## Publishing Images (`release.sh`)
+## Publishing Images
 
-CI publishes on every push to `main` and on `v*` tags. To **publish a versioned
-release manually** — e.g. cut a build from your machine without pushing a tag —
-use [`release.sh`](release.sh) at the repo root. It builds the `api` and
-`frontend` images, tags each with a **version + `latest`**, and pushes a
-**multi-arch manifest (amd64 + arm64)** so the images pull on both Apple Silicon
-and x86 hosts.
+**CI is the primary path.** [`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml)
+builds and pushes the image on `v*` tags (and manual `workflow_dispatch`). It sets
+up QEMU + Buildx **on the GitHub runner** and authenticates with the built-in
+`GITHUB_TOKEN` — nothing runs on your machine, and no PAT is needed. To cut a
+release:
 
 ```bash
-# 1. Log in — pushing needs a PAT with `write:packages`
-echo <PAT> | docker login ghcr.io -u marcoguastalli --password-stdin
+git tag -a v1.1.0 -m "…" && git push origin v1.1.0   # → image tags 1.1.0, 1.1, latest
+```
 
-# 2. Release
-./release.sh              # version each image from its own package.json (default)
-./release.sh 1.2.3        # force version 1.2.3 for both images
-./release.sh --sha        # version = git short SHA (immutable, traceable)
-./release.sh --tag        # version = `git describe --tags`
-./release.sh api 1.2.3    # only the api image, at 1.2.3
-./release.sh --no-push    # build locally only (single-arch, loads into docker)
-./release.sh --no-latest  # push the version tag only, leave `latest` untouched
+The first release on this branch was the git tag `v1.0.0-no-nginx`
+(→ `1.0.0-no-nginx`, `latest`, `sha-<commit>`).
+
+**`release.sh` is a local/manual alternative.** It builds from the repo-root
+`Dockerfile` and pushes the single `ghcr.io/marcoguastalli/app-bookmarks` image as
+a multi-arch manifest. It requires a **local Buildx** plugin and a PAT with
+`write:packages`:
+
+```bash
+echo <PAT> | docker login ghcr.io -u marcoguastalli --password-stdin
+./release.sh              # version from api/package.json
+./release.sh 1.2.3        # explicit version
+./release.sh --sha        # version = git short SHA
+./release.sh --no-push    # build locally only (single-arch --load)
 ./release.sh --help       # full usage
 ```
 
-**Cutting a version:** bump `version` in `api/package.json` and/or
-`frontend/package.json`, then run `./release.sh` (versions are read per-component
-from each `package.json`). Or skip the edit and pass an explicit version, e.g.
-`./release.sh 1.3.0`.
+> Note: on a fresh macOS + Colima setup the Homebrew `docker` CLI does **not**
+> bundle Buildx. Install it with `brew install docker-buildx` and symlink it into
+> `~/.docker/cli-plugins/docker-buildx`. This is only needed for the local
+> `release.sh` path — CI does not touch your machine.
 
-Notes:
-- The first `--push` run creates a one-time `docker-container` buildx builder
-  named `bookmarks-builder` (required for multi-arch). It's reused afterwards.
-- `--no-push` produces a **single-arch** local image (your host's arch) — buildx
-  cannot `--load` a multi-arch manifest into the local daemon. Fine for local
-  testing; use the default push for releases.
-- Your `gh` CLI token (`repo`, `read:org`) is **not** enough to push — mint a
-  classic PAT with `write:packages` for `docker login`.
+## Migration: dropping nginx (what changed on this branch)
+
+Previously the stack was four services — **postgres + api + frontend + nginx** —
+producing **two** app images (`app-bookmarks-api`, `app-bookmarks-frontend`) plus
+a standalone `nginx` reverse proxy. Two separate things used nginx: the reverse
+proxy, and the frontend image (nginx serving the static SPA).
+
+This branch collapses that to **one** image:
+
+- **`api/src/index.ts`** — the production/dev bootstrap wraps the API app under
+  `/api` (nginx used to strip that prefix) and serves the built SPA from
+  `PUBLIC_DIR` via Hono's `serveStatic`, with a SPA fallback to `index.html`.
+  Content-hashed `/assets/*` get `Cache-Control: immutable`; the HTML shell gets
+  `no-cache`. The exported `app` still mounts routes at the root, so the
+  integration tests are unchanged.
+  - **Gotcha handled:** Hono's `compress()` middleware was tried but removed — the
+    Bun build in the runtime image doesn't expose `CompressionStream`, so it threw
+    a 500 on any request advertising `Accept-Encoding` (i.e. every browser).
+- **`Dockerfile`** (repo root) — multi-stage: stage 1 runs the Vite build, stage 2
+  is the Bun/Hono runtime with `dist` copied to `./public` (`PUBLIC_DIR`).
+- **`docker-compose.yml`** — `nginx` and `frontend` services removed; the `api`
+  service builds the root Dockerfile, is named `app-bookmarks`, and publishes on
+  `80:3000`.
+- **Removed files:** `nginx.conf`, `frontend/Dockerfile`, `frontend/nginx.conf`,
+  and the per-service `.dockerignore`s (superseded by a root `.dockerignore`).
+- **`.github/workflows/docker-publish.yml`** — dropped the api/frontend matrix;
+  builds the single `app-bookmarks` image and triggers on `v*` tags.
+
+Trade-offs: no nginx edge tuning, and no Vite HMR in local dev (the API serves the
+pre-built SPA — rebuild the frontend when it changes). In exchange: one image, one
+process, a much simpler deployment.
 
 ## Environment Variables
 
@@ -184,6 +195,7 @@ POSTGRES_PASSWORD=your_secure_password
 NODE_ENV=production                # or development
 MAX_FOLDER_DEPTH=10                # nesting limit
 LOG_LEVEL=info                     # debug, info, warn, error
+PUBLIC_DIR=./public                # built SPA to serve (../frontend/dist for local dev)
 PGADMIN_DEFAULT_PASSWORD=your_pass # dev only
 ```
 
@@ -197,129 +209,102 @@ PGADMIN_DEFAULT_PASSWORD=your_pass # dev only
 │      http://localhost:80             │
 └─────────────────┬───────────────────┘
                   │
-         ┌────────▼────────┐
-         │  nginx:80       │
-         │  reverse proxy  │
-         └────┬────────┬───┘
-              │        │
-       ┌──────▼──┐  ┌──▼────────────┐
-       │ API     │  │ Frontend      │
-       │ :3000   │  │ (React SPA)   │
-       └──────┬──┘  └────────────────┘
-              │
-         ┌────▼──────────────┐
-         │   PostgreSQL:5432 │
-         │   (bookmarks DB)  │
-         └───────────────────┘
+        ┌─────────▼──────────────────┐
+        │  app-bookmarks             │
+        │  Hono on Bun  (:3000)      │
+        │                            │
+        │  /api/*  → API routes      │
+        │  /health → liveness        │
+        │  /*      → React SPA        │
+        │            (static + SPA   │
+        │             fallback)      │
+        └─────────────┬──────────────┘
+                      │
+              ┌───────▼───────────┐
+              │  PostgreSQL:5432  │
+              │  (bookmarks DB)   │
+              └───────────────────┘
 ```
 
-**Routing:**
-- `GET /` → frontend (React SPA, served by nginx)
-- `GET /api/*` → API (Hono, running on port 3000)
+**Routing (all handled by Hono in one process):**
+- `GET /` → React SPA (served from `PUBLIC_DIR`)
+- `GET /api/*` → API routes (folders, bookmarks, export, import, admin)
 - `POST /api/import` → bookmark import
 - `GET /api/export` → bookmarks.html download
+- `GET /health` → container liveness probe
 
-## Dockerfile Details
+## Dockerfile Details (`Dockerfile`, repo root)
 
-### API (`api/Dockerfile`)
-
-- **Single stage**: Bun includes build tools at runtime; not a bloat concern for small API
-- **Production deps only**: `bun install --production`
+- **Stage 1 (`frontend-build`)**: `oven/bun:1.2.5-alpine` — `bun install` +
+  `bun run build` → `/fe/dist`.
+- **Stage 2 (`production`)**: `oven/bun:1.2.5-alpine` — production API deps, copies
+  `api/src` and `--from=frontend-build /fe/dist` → `./public`. Runs as the
+  non-root `bun` user.
 - **Entrypoint**: `CMD ["bun", "run", "src/index.ts"]`
-- **Port**: 3000
-- **Healthcheck**: `GET /health` with 15s interval, 3 retries
-
-### Frontend (`frontend/Dockerfile`)
-
-- **Stage 1 (build)**: Bun + TypeScript compiler + Vite
-  - Compiles React + Vite bundle → `/app/dist`
-- **Stage 2 (runtime)**: `nginx:1.26.3-alpine`
-  - Serves static `/dist` with SPA fallback (`try_files → index.html`)
-  - Asset caching: 1-year expiry for versioned files (`.js`, `.css`)
-  - Port: 80
-
-### Reverse Proxy (`docker-compose.yml`, nginx service)
-
-- Terminates HTTP on port 80
-- Strips `/api` prefix: `/api/health` → `http://api:3000/health`
-- Proxies everything else to frontend
-- Handles CORS headers (configured in nginx.conf)
+- **Port**: 3000 (published as `80:3000` in Compose)
+- **Healthcheck**: `GET /health`, 15s interval, 3 retries
+- **`PUBLIC_DIR=./public`** set in the image so Hono knows where the SPA lives.
 
 ## Health Checks
 
-All services implement liveness probes. Startup sequence:
+Startup sequence:
 
 ```
 1. postgres ready? → pg_isready
-2. api ready? → GET /health
-3. frontend ready? → HTTP 200
-4. nginx ready? → GET /health
+2. app ready?      → GET /health
 ```
 
-Retries: 3–5, interval: 10–15s. Docker Compose waits for `postgres` and `api` health before starting dependent services.
+Docker Compose waits for `postgres` health before starting `app`.
 
 ## Development
 
-### API Development
+This branch runs as a **single process** — the API serves the built SPA, so there
+is no Vite dev server (no HMR). Rebuild the frontend when it changes.
+
+```bash
+docker compose up postgres -d               # start only PostgreSQL
+
+# Build the SPA, then run the app (serves SPA + API on :3000)
+cd frontend && bun run build
+cd ../api && PUBLIC_DIR=../frontend/dist bun run dev
+# App: http://localhost:3000  (API under /api, Swagger at /api/docs)
+```
+
+### API tasks
 
 ```bash
 cd api
-
-# Watch mode (hot reload)
-bun run dev
-
-# Tests
+bun run seed          # seed DB with sample data
 bun test              # all tests
-bun test:unit         # unit tests only
-bun test:integration  # integration tests
-
-# Seed database (dev data)
-bun run seed
+bun test:unit         # no DB required
+bun test:integration  # requires PostgreSQL
 ```
 
 Database migrations run automatically on startup (see `api/src/db/migrate.ts`).
 
-### Frontend Development
+### Frontend tasks
 
 ```bash
 cd frontend
-
-# Dev server (hot reload, :5173)
-bun run dev
-
-# Production build
-bun run build
-
-# Preview production build
-bun run preview
-
-# E2E tests (Playwright)
-bun run test:e2e
+bun run build         # production build + tsc check
+bun run test:e2e      # Playwright E2E (Chromium + Firefox)
 ```
 
 ## Production Deployment
 
-1. **Pin image versions** ✓ (all tags explicit, no `:latest`)
+1. **Pin the image version** — use `ghcr.io/marcoguastalli/app-bookmarks:1.0.0-no-nginx`, not `:latest`
 2. **Secrets management** — use `.env.production` (not in repo)
-   ```bash
-   # Never commit production secrets
-   git add .env.example
-   git add .env.production.local && echo ".env.production.local" >> .gitignore
-   ```
-3. **Volume persistence** — named volumes survive container restarts
-   - `postgres-data` — database files
-   - `pgadmin-data` — pgAdmin config (remove for production)
-4. **Network isolation** — all services on `app-network` bridge; no exposed ports except 80
+3. **Volume persistence** — the `postgres-data` named volume survives restarts
+4. **Network isolation** — services on the `app-network` bridge; only port 80 exposed
 5. **Restart policy** — `unless-stopped` (automatic recovery on crash)
 
 ### Production Checklist
 
 - [ ] Change `POSTGRES_PASSWORD` in `.env`
 - [ ] Set `NODE_ENV=production`
-- [ ] Review `MAX_FOLDER_DEPTH` (default 10, adjust as needed)
+- [ ] Review `MAX_FOLDER_DEPTH` (default 10)
 - [ ] Remove pgAdmin from docker-compose (dev only)
-- [ ] Use Docker secrets or external `.env.production` file
-- [ ] Test health checks: `docker-compose ps` shows all healthy
+- [ ] Test the health check: `docker compose ps` shows `app` healthy
 - [ ] Backup database: `docker exec docker-postgres pg_dump -U postgres bookmarks > backup.sql`
 
 ## Networking
@@ -327,136 +312,81 @@ bun run test:e2e
 Services communicate via Docker DNS (automatic):
 
 ```
-API → Database:  postgresql://postgres:PASSWORD@postgres:5432/bookmarks
-Nginx → API:     http://api:3000
-Nginx → Frontend: http://frontend:80
+App → Database:  postgresql://postgres:PASSWORD@postgres:5432/bookmarks
 ```
 
-No manual IP configuration needed. Service names resolve automatically within the `app-network`.
+Service names resolve automatically within `app-network`.
 
 ## Logs
 
-View logs from all services:
-
 ```bash
-# All services, follow
-docker-compose logs -f
-
-# Specific service
-docker-compose logs -f api
-docker-compose logs -f postgres
-docker-compose logs -f frontend
-docker-compose logs -f nginx
-
-# Last 100 lines
-docker-compose logs --tail=100 api
+docker compose logs -f            # all services, follow
+docker compose logs -f app        # the single app image (SPA + API)
+docker compose logs -f postgres
+docker compose logs --tail=100 app
 ```
 
 ## Database Backups
 
-### Backup
-
 ```bash
+# Backup
 docker exec docker-postgres pg_dump -U postgres bookmarks > backup.sql
-```
 
-### Restore
-
-```bash
+# Restore
 docker exec -i docker-postgres psql -U postgres bookmarks < backup.sql
-```
 
-### Backup with docker-compose
-
-```bash
-docker-compose exec -T postgres pg_dump -U postgres bookmarks > backup.sql
+# Via compose
+docker compose exec -T postgres pg_dump -U postgres bookmarks > backup.sql
 ```
 
 ## Cleanup
 
-### Stop All Services
-
 ```bash
-docker-compose down
-```
-
-### Stop + Remove Volumes (⚠️ DELETES DATA)
-
-```bash
-docker-compose down -v
-```
-
-### Remove Everything (containers, volumes, images)
-
-```bash
-docker-compose down -v --rmi all
+docker compose down            # stop services
+docker compose down -v         # stop + remove volumes (⚠️ DELETES DATA)
+docker compose down -v --rmi all   # also remove images
 ```
 
 ## Troubleshooting
 
-### Services Not Starting?
+### Services not starting?
 
 ```bash
-# Check status
-docker-compose ps
-
-# Check logs
-docker-compose logs postgres
-docker-compose logs api
+docker compose ps
+docker compose logs postgres
+docker compose logs app
 ```
 
-### API can't connect to database?
+### App can't connect to the database?
 
 ```bash
-# Verify PostgreSQL is ready
-docker-compose logs postgres | grep "ready to accept"
-
-# Restart API
-docker-compose restart api
+docker compose logs postgres | grep "ready to accept"
+docker compose restart app
 ```
 
-### Frontend not loading?
+### SPA loads but API calls fail (or "Internal Server Error")?
 
 ```bash
-# Check nginx logs
-docker-compose logs nginx
-
-# Verify frontend built successfully
-docker-compose logs frontend
+# Check the single app image's logs — it serves both SPA and API
+docker compose logs app | tail -50
+# API is mounted under /api; verify directly:
+curl http://localhost/api/folders/tree
 ```
 
 ### Database migrations failed?
 
 ```bash
-# Check API startup logs
-docker-compose logs api | grep -i migration
-
-# Re-run migrations (API restart)
-docker-compose down && docker-compose up
+docker compose logs app | grep -i migration
+docker compose down && docker compose up
 ```
-
-## Differences from Carousel Project
-
-| Aspect | Carousel | Bookmarks App |
-|--------|----------|---------------|
-| **Package manager** | pnpm | Bun |
-| **Runtime** | Node 22 | Bun 1.2.5 |
-| **Backend** | None (static site) | Hono API + PostgreSQL |
-| **Frontend build** | Vite | Vite (Bun) |
-| **Orchestration** | Single Dockerfile | Full docker-compose |
-| **Database** | None | PostgreSQL 17 |
-| **Reverse proxy** | Baked into image | Separate nginx service |
-| **Nginx version** | `:alpine` (unversioned) | `1.26.3-alpine` (pinned) |
 
 ## API Endpoints
 
 See Swagger UI: `http://localhost/api/docs`
 
-**Examples:**
-
 ```bash
-# Health check
-curl http://localhost/api/health
+# Health check (root, for the container probe)
+curl http://localhost/health
 
 # List all folders
 curl http://localhost/api/folders
@@ -470,8 +400,7 @@ curl -X POST http://localhost/api/folders \
   -d '{"name":"Work","parentId":null}'
 
 # Export bookmarks
-curl http://localhost/api/export?folderIds=<uuid> \
-  -o bookmarks.html
+curl "http://localhost/api/export?folderIds=<uuid>" -o bookmarks.html
 
 # Import bookmarks
 curl -X POST http://localhost/api/import \
