@@ -127,6 +127,11 @@ To persist the database on the host instead of a named volume, swap the postgres
 
 ### Plain `docker run` (no Compose) with a fresh host-mounted DB
 
+> **Shortcut:** [`docker-start.sh`](docker-start.sh) does everything below for you —
+> `./docker-start.sh` (add `--seed` for sample data, `--fresh` to wipe first,
+> `--down` to tear down). Override defaults via env vars, e.g.
+> `DATA_DIR=~/temp/mybm PORT=8080 ./docker-start.sh`.
+
 The `app-bookmarks` image is **not** a self-contained `docker run` — it's the
 SPA + API and still needs a PostgreSQL container to talk to. To spin up a fresh
 database stored on the host (here `~/temp/new-bookmarks`) plus the app, run the
