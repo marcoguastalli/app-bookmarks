@@ -1,9 +1,9 @@
-name: Publish Docker images
+name: Publish Docker image
 
-# Build and push the api and frontend container images to GitHub Container Registry (GHCR).
+# Build and push the single app-bookmarks container image to GitHub Container Registry (GHCR).
+# This branch ships one image (SPA + API) built from the repo-root Dockerfile.
 on:
   push:
-    branches: [main]
     tags: ['v*']        # pushing a v1.2.3 tag publishes that version
   workflow_dispatch:    # allow manual runs from the Actions tab
 
@@ -16,15 +16,6 @@ jobs:
     permissions:
       contents: read
       packages: write   # required to push to GHCR
-
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - component: api
-            context: ./api
-          - component: frontend
-            context: ./frontend
 
     steps:
       - name: Checkout
@@ -47,22 +38,22 @@ jobs:
         id: meta
         uses: docker/metadata-action@v6
         with:
-          # -> ghcr.io/marcoguastalli/app-bookmarks-api / -frontend
-          images: ${{ env.REGISTRY }}/${{ github.repository }}-${{ matrix.component }}
+          # -> ghcr.io/marcoguastalli/app-bookmarks
+          images: ${{ env.REGISTRY }}/${{ github.repository }}
           tags: |
             type=ref,event=branch
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=sha
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ github.ref_type == 'tag' }}
 
       - name: Build and push
         uses: docker/build-push-action@v7
         with:
-          context: ${{ matrix.context }}
+          context: .
           platforms: linux/amd64,linux/arm64   # multi-arch: pulls on x86 and Apple Silicon
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha,scope=${{ matrix.component }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.component }}
+          cache-from: type=gha,scope=app-bookmarks
+          cache-to: type=gha,mode=max,scope=app-bookmarks
