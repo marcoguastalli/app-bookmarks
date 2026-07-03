@@ -125,6 +125,67 @@ networks:
 To persist the database on the host instead of a named volume, swap the postgres
 `volumes:` entry for a bind-mount, e.g. `- "~/bookmarks-data:/var/lib/postgresql/data:rw"`.
 
+### Plain `docker run` (no Compose) with a fresh host-mounted DB
+
+The `app-bookmarks` image is **not** a self-contained `docker run` — it's the
+SPA + API and still needs a PostgreSQL container to talk to. To spin up a fresh
+database stored on the host (here `~/temp/new-bookmarks`) plus the app, run the
+two containers on a shared network. The app runs its migrations on startup, so an
+empty host dir yields a clean schema with no data.
+
+```bash
+# 0. Fresh host dir for the DB + a network for the two containers to talk
+mkdir -p ~/temp/new-bookmarks
+docker network create bookmarks-net
+
+# 1. PostgreSQL — data bind-mounted to ~/temp/new-bookmarks
+docker run -d --name bookmarks-db \
+  --network bookmarks-net \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=CHANGE_ME \
+  -e POSTGRES_DB=bookmarks \
+  -e PGDATA=/var/lib/postgresql/data/pgdata \
+  -v ~/temp/new-bookmarks:/var/lib/postgresql/data \
+  postgres:17.8-alpine3.23
+
+# 2. The app (single image: SPA + API). Migrations run on startup.
+docker run -d --name app-bookmarks \
+  --network bookmarks-net \
+  -e DATABASE_URL=postgresql://postgres:CHANGE_ME@bookmarks-db:5432/bookmarks \
+  -e NODE_ENV=production \
+  -p 80:3000 \
+  ghcr.io/marcoguastalli/app-bookmarks:1.0.0-no-nginx
+```
+
+Then open **http://localhost**. The image is public, so no `docker login` needed.
+
+Notes:
+- **`PGDATA=…/pgdata` (a subdirectory)** — on macOS/Colima bind mounts, pointing
+  `PGDATA` at a subdir of the mount avoids `initdb`/permission quirks that occur
+  when Postgres inits directly on the mount root. Data lands in
+  `~/temp/new-bookmarks/pgdata/`.
+- **Change the password** (`CHANGE_ME`) in both commands — it must match in the DB
+  and in `DATABASE_URL`.
+- **Port** — using `-p 80:3000`; if 80 is taken use e.g. `-p 8080:3000` →
+  http://localhost:8080.
+- **Seed data** — none (clean DB). Load the sample data with
+  `docker exec -it app-bookmarks bun run seed`.
+
+Verify / logs:
+
+```bash
+docker logs -f app-bookmarks     # "listening on port 3000" + "migrations up to date"
+curl http://localhost/health
+```
+
+Teardown (keeps the DB files on disk):
+
+```bash
+docker rm -f app-bookmarks bookmarks-db
+docker network rm bookmarks-net
+# To start over truly fresh, also: rm -rf ~/temp/new-bookmarks
+```
+
 ## Publishing Images
 
 **CI is the primary path.** [`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml)
