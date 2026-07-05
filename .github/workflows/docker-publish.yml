@@ -57,4 +57,7 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=app-bookmarks
-          cache-to: type=gha,mode=max,scope=app-bookmarks
+          # ignore-error: cache export to the GHA backend is flaky ("error writing
+          # layer blob: not_found") and runs after the image is already pushed —
+          # don't let it fail the whole run
+          cache-to: type=gha,mode=max,scope=app-bookmarks,ignore-error=true
