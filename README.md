@@ -80,7 +80,9 @@ The packages are **public** — no `docker login` needed to pull.
 
 > **Two services, not four.** Because the SPA and API share one image, the stack
 > is just **postgres + app** (pgAdmin is dev-only). The only persistent state is
-> the Postgres database in the named `postgres-data` volume.
+> the Postgres database. The repo's `docker-compose.yml` bind-mounts it to a
+> host directory (`POSTGRES_DATA_DIR`, default `~/opt/docker/bookmarks-data/postgres`);
+> the snippet below uses a named volume instead for portability.
 
 Save this as `docker-compose.ghcr.yml` and run `docker compose -f docker-compose.ghcr.yml up -d`:
 
@@ -125,7 +127,7 @@ networks:
 ```
 
 To persist the database on the host instead of a named volume, swap the postgres
-`volumes:` entry for a bind-mount, e.g. `- "~/bookmarks-data:/var/lib/postgresql:rw"`.
+`volumes:` entry for a bind-mount, e.g. `- "~/opt/docker/bookmarks-data:/var/lib/postgresql:rw"`.
 
 ### Plain `docker run` (no Compose) with a fresh host-mounted DB
 
@@ -371,7 +373,10 @@ bun run test:e2e      # Playwright E2E (Chromium + Firefox)
 
 1. **Pin the image version** — use `ghcr.io/marcoguastalli/app-bookmarks:1.0.0-no-nginx`, not `:latest`
 2. **Secrets management** — use `.env.production` (not in repo)
-3. **Volume persistence** — the `postgres-data` named volume survives restarts
+3. **Volume persistence** — DB and pgAdmin data are **host bind mounts**
+   (`POSTGRES_DATA_DIR` / `PGADMIN_DATA_DIR`, default `~/opt/docker/bookmarks-data/*`).
+   They survive `docker compose down -v` and even a Docker/Colima VM rebuild,
+   and can be backed up with normal file tools (Time Machine, rsync)
 4. **Network isolation** — services on the `app-network` bridge; only port 80 exposed externally (postgres is bound to `127.0.0.1` for local tooling)
 5. **Restart policy** — `unless-stopped` (automatic recovery on crash)
 
@@ -423,9 +428,12 @@ These are manual — scheduled/rotated backups are still an open item, see
 
 ```bash
 docker compose down            # stop services
-docker compose down -v         # stop + remove volumes (⚠️ DELETES DATA)
-docker compose down -v --rmi all   # also remove images
+docker compose down --rmi all  # also remove images
 ```
+
+DB and pgAdmin data live in **host directories** (`~/opt/docker/bookmarks-data/*` by
+default), so even `down -v` does **not** delete them. To start truly fresh:
+`rm -rf ~/opt/docker/bookmarks-data` (⚠️ DELETES DATA).
 
 ## Troubleshooting
 

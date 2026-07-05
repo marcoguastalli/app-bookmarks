@@ -8,9 +8,11 @@ services:
       # reaches postgres over the internal network
       - "127.0.0.1:5432:5432"
     volumes:
+      # Host bind mount → survives `docker compose down -v` and even
+      # `colima delete`, and is visible to Time Machine.
       # PG 18 image layout: volume is /var/lib/postgresql, PGDATA defaults to
       # /var/lib/postgresql/18/docker (version-scoped, pg_upgrade-friendly)
-      - postgres-data:/var/lib/postgresql:rw
+      - ${POSTGRES_DATA_DIR:-~/opt/docker/bookmarks-data/postgres}:/var/lib/postgresql:rw
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-CHANGE_ME}
@@ -30,7 +32,7 @@ services:
     restart: unless-stopped
     profiles: [dev]
     volumes:
-      - pgadmin-data:/var/lib/pgadmin:rw
+      - ${PGADMIN_DATA_DIR:-~/opt/docker/bookmarks-data/pgadmin}:/var/lib/pgadmin:rw
     environment:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:-pgadmin4@pgadmin.org}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-CHANGE_ME}
@@ -69,10 +71,6 @@ services:
       timeout: 5s
       retries: 3
       start_period: 15s
-
-volumes:
-  postgres-data:
-  pgadmin-data:
 
 networks:
   app-network:
