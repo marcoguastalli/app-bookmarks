@@ -4,8 +4,9 @@ name: Publish Docker image
 # This branch ships one image (SPA + API) built from the repo-root Dockerfile.
 on:
   push:
-    tags: ['v*']        # pushing a v1.2.3 tag publishes that version
-  workflow_dispatch:    # allow manual runs from the Actions tab
+    branches: ['no-nginx']  # every branch push publishes :no-nginx + :sha-<commit>
+    tags: ['v*']            # pushing a v1.2.3 tag publishes that version + :latest
+  workflow_dispatch:        # allow manual runs from the Actions tab
 
 env:
   REGISTRY: ghcr.io
