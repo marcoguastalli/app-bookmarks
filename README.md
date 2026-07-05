@@ -26,10 +26,10 @@ frontend image and the nginx reverse proxy are gone.
 
 | Layer | Technology | Image |
 |-------|-----------|-------|
-| **App (SPA + API)** | Hono (TypeScript) + Bun serving the built React SPA | `oven/bun:1.2.5-alpine` |
-| **Database** | PostgreSQL 17 | `postgres:17.8-alpine3.23` |
-| **Frontend build** | React 18 + TypeScript + Vite | `oven/bun:1.2.5-alpine` (build stage) |
-| **Admin UI** | pgAdmin 4 | `dpage/pgadmin4:9.12.0` (dev only) |
+| **App (SPA + API)** | Hono (TypeScript) + Bun serving the built React SPA | `oven/bun:1.3.14-alpine` |
+| **Database** | PostgreSQL 18 | `postgres:18.4-alpine3.24` |
+| **Frontend build** | React 18 + TypeScript + Vite | `oven/bun:1.3.14-alpine` (build stage) |
+| **Admin UI** | pgAdmin 4 | `dpage/pgadmin4:9.16` (dev only) |
 
 There is **no** `nginx` service and **no** standalone frontend image — the Vite
 `dist/` bundle is copied into the app image at build time and served by Hono.
@@ -41,14 +41,16 @@ There is **no** `nginx` service and **no** standalone frontend image — the Vit
 cp .env.example .env
 # Edit .env, change POSTGRES_PASSWORD at minimum
 
-# 2. Start all services (builds the single app-bookmarks image)
+# 2. Start postgres + app (builds the single app-bookmarks image)
 docker compose up --build
+#    …or include pgAdmin (dev profile):
+docker compose --profile dev up --build
 
 # 3. Access the app
 # App (SPA):  http://localhost
 # API:        http://localhost/api
 # Swagger:    http://localhost/api/docs
-# pgAdmin:    http://localhost:5050 (dev only)
+# pgAdmin:    http://localhost:5050 (only with --profile dev)
 ```
 
 Wait for the health check to pass (~15–30 seconds).
@@ -85,10 +87,10 @@ Save this as `docker-compose.ghcr.yml` and run `docker compose -f docker-compose
 ```yaml
 services:
   postgres:
-    image: postgres:17.8-alpine3.23
+    image: postgres:18.4-alpine3.24
     restart: unless-stopped
     volumes:
-      - postgres-data:/var/lib/postgresql/data:rw
+      - postgres-data:/var/lib/postgresql:rw
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-CHANGE_ME}
@@ -123,7 +125,7 @@ networks:
 ```
 
 To persist the database on the host instead of a named volume, swap the postgres
-`volumes:` entry for a bind-mount, e.g. `- "~/bookmarks-data:/var/lib/postgresql/data:rw"`.
+`volumes:` entry for a bind-mount, e.g. `- "~/bookmarks-data:/var/lib/postgresql:rw"`.
 
 ### Plain `docker run` (no Compose) with a fresh host-mounted DB
 
@@ -149,9 +151,8 @@ docker run -d --name bookmarks-db \
   -e POSTGRES_USER=postgres \
   -e POSTGRES_PASSWORD=CHANGE_ME \
   -e POSTGRES_DB=bookmarks \
-  -e PGDATA=/var/lib/postgresql/data/pgdata \
-  -v ~/temp/new-bookmarks:/var/lib/postgresql/data \
-  postgres:17.8-alpine3.23
+  -v ~/temp/new-bookmarks:/var/lib/postgresql \
+  postgres:18.4-alpine3.24
 
 # 2. The app (single image: SPA + API). Migrations run on startup.
 docker run -d --name app-bookmarks \
@@ -165,10 +166,12 @@ docker run -d --name app-bookmarks \
 Then open **http://localhost**. The image is public, so no `docker login` needed.
 
 Notes:
-- **`PGDATA=…/pgdata` (a subdirectory)** — on macOS/Colima bind mounts, pointing
-  `PGDATA` at a subdir of the mount avoids `initdb`/permission quirks that occur
-  when Postgres inits directly on the mount root. Data lands in
-  `~/temp/new-bookmarks/pgdata/`.
+- **Mount at `/var/lib/postgresql` (not `…/data`)** — the Postgres 18 image moved
+  its volume to `/var/lib/postgresql` and defaults `PGDATA` to the version-scoped
+  subdir `/var/lib/postgresql/18/docker`. Since the data dir is a subdir of the
+  mount root, this also avoids the macOS/Colima `initdb`/permission quirks that
+  previously required a manual `PGDATA=…/pgdata`. Data lands in
+  `~/temp/new-bookmarks/18/docker/`.
 - **Change the password** (`CHANGE_ME`) in both commands — it must match in the DB
   and in `DATABASE_URL`.
 - **Port** — using `-p 80:3000`; if 80 is taken use e.g. `-p 8080:3000` →
@@ -309,9 +312,9 @@ PGADMIN_DEFAULT_PASSWORD=your_pass # dev only
 
 ## Dockerfile Details (`Dockerfile`, repo root)
 
-- **Stage 1 (`frontend-build`)**: `oven/bun:1.2.5-alpine` — `bun install` +
+- **Stage 1 (`frontend-build`)**: `oven/bun:1.3.14-alpine` — `bun install` +
   `bun run build` → `/fe/dist`.
-- **Stage 2 (`production`)**: `oven/bun:1.2.5-alpine` — production API deps, copies
+- **Stage 2 (`production`)**: `oven/bun:1.3.14-alpine` — production API deps, copies
   `api/src` and `--from=frontend-build /fe/dist` → `./public`. Runs as the
   non-root `bun` user.
 - **Entrypoint**: `CMD ["bun", "run", "src/index.ts"]`
@@ -369,7 +372,7 @@ bun run test:e2e      # Playwright E2E (Chromium + Firefox)
 1. **Pin the image version** — use `ghcr.io/marcoguastalli/app-bookmarks:1.0.0-no-nginx`, not `:latest`
 2. **Secrets management** — use `.env.production` (not in repo)
 3. **Volume persistence** — the `postgres-data` named volume survives restarts
-4. **Network isolation** — services on the `app-network` bridge; only port 80 exposed
+4. **Network isolation** — services on the `app-network` bridge; only port 80 exposed externally (postgres is bound to `127.0.0.1` for local tooling)
 5. **Restart policy** — `unless-stopped` (automatic recovery on crash)
 
 ### Production Checklist
@@ -377,7 +380,7 @@ bun run test:e2e      # Playwright E2E (Chromium + Firefox)
 - [ ] Change `POSTGRES_PASSWORD` in `.env`
 - [ ] Set `NODE_ENV=production`
 - [ ] Review `MAX_FOLDER_DEPTH` (default 10)
-- [ ] Remove pgAdmin from docker-compose (dev only)
+- [x] pgAdmin is behind the `dev` Compose profile — a plain `docker compose up` never starts it
 - [ ] Test the health check: `docker compose ps` shows `app` healthy
 - [ ] Backup database: `docker exec docker-postgres pg_dump -U postgres bookmarks > backup.sql`
 

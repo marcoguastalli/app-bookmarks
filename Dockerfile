@@ -4,7 +4,7 @@
 # which also serves the built SPA. Replaces the separate frontend + nginx images.
 
 # Stage 1: build the frontend
-FROM oven/bun:1.2.5-alpine AS frontend-build
+FROM oven/bun:1.3.14-alpine AS frontend-build
 WORKDIR /fe
 COPY frontend/package.json frontend/bun.lock* ./
 RUN bun install --frozen-lockfile
@@ -12,7 +12,7 @@ COPY frontend/ ./
 RUN bun run build
 
 # Stage 2: API runtime that also serves the built frontend
-FROM oven/bun:1.2.5-alpine AS production
+FROM oven/bun:1.3.14-alpine AS production
 WORKDIR /app
 
 COPY api/package.json api/bun.lock* ./

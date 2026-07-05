@@ -22,7 +22,7 @@ set -euo pipefail
 DATA_DIR="${DATA_DIR:-$HOME/temp/new-bookmarks}"
 PORT="${PORT:-80}"
 IMAGE="${IMAGE:-ghcr.io/marcoguastalli/app-bookmarks:1.0.0-no-nginx}"
-POSTGRES_IMAGE="${POSTGRES_IMAGE:-postgres:17.8-alpine3.23}"
+POSTGRES_IMAGE="${POSTGRES_IMAGE:-postgres:18.4-alpine3.24}"
 
 DB_USER="${DB_USER:-postgres}"
 DB_PASSWORD="${DB_PASSWORD:-CHANGE_ME}"
@@ -89,8 +89,7 @@ docker run -d --name "$DB_CONTAINER" \
   -e POSTGRES_USER="$DB_USER" \
   -e POSTGRES_PASSWORD="$DB_PASSWORD" \
   -e POSTGRES_DB="$DB_NAME" \
-  -e PGDATA=/var/lib/postgresql/data/pgdata \
-  -v "$DATA_DIR:/var/lib/postgresql/data" \
+  -v "$DATA_DIR:/var/lib/postgresql" \
   "$POSTGRES_IMAGE" >/dev/null
 
 echo -n "→ waiting for PostgreSQL to be ready"
