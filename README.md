@@ -416,6 +416,9 @@ docker exec -i docker-postgres psql -U postgres bookmarks < backup.sql
 docker compose exec -T postgres pg_dump -U postgres bookmarks > backup.sql
 ```
 
+These are manual — scheduled/rotated backups are still an open item, see
+[Future Improvements](#future-improvements).
+
 ## Cleanup
 
 ```bash
@@ -484,6 +487,31 @@ curl -X POST http://localhost/api/import \
   -F "file=@bookmarks.html" \
   -F "targetFolderId=<uuid>"
 ```
+
+## Future Improvements
+
+Known gaps, in rough priority order — not blocking, but worth doing:
+
+- [ ] **Automate dependency/image bumps** — add [Renovate](https://docs.renovatebot.com/)
+  (or Dependabot with the `docker` ecosystem) to watch the image tags pinned in
+  `Dockerfile`, `docker-compose.yml`, `docker-start.sh`, and the README
+  (`postgres`, `dpage/pgadmin4`, `oven/bun`). The 2026-07 upgrade round
+  (Postgres 17→18, pgAdmin 9.12→9.16, Bun 1.2.5→1.3.14) was done manually and
+  the images had drifted for months; a bot would have raised each bump as a PR.
+  Remember postgres **major** bumps need a dump/restore (see note below).
+- [ ] **Scheduled database backups** — the [Database Backups](#database-backups)
+  commands are manual. Add a cron/launchd job or a small sidecar container that
+  runs `pg_dump` on a schedule and rotates old dumps (e.g. keep 7 daily + 4
+  weekly). The Netscape HTML export (`GET /api/export`) is a useful secondary,
+  browser-importable backup of the bookmarks themselves.
+- [ ] **Postgres major-version upgrades need a migration** — data files are not
+  compatible across major versions: a volume initialized by PG *N* will not
+  start under PG *N+1*. Procedure: `pg_dump` on the old version → wipe/replace
+  the volume → restore on the new version (or use `pg_upgrade`). Since PG 18
+  the official image mounts `/var/lib/postgresql` with a version-scoped data
+  dir (`18/docker`), which makes future side-by-side `pg_upgrade` runs easier.
+- [ ] **Adopt PG 18 niceties when useful** — e.g. `uuidv7()` for time-ordered
+  primary keys on new tables. Nothing in the current schema requires action.
 
 ## License & Contributing
 
