@@ -21,6 +21,17 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0  # full history for commit count
+
+      - name: Compute version
+        id: version
+        if: github.ref_type == 'branch'
+        run: |
+          MAJOR_MINOR=$(cat VERSION)
+          PATCH=$(git rev-list --count HEAD)
+          VERSION="${MAJOR_MINOR}.${PATCH}"
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
 
       - name: Set up QEMU   # enables cross-arch (arm64) builds on the amd64 runner
         uses: docker/setup-qemu-action@v4
@@ -42,9 +53,10 @@ jobs:
           # -> ghcr.io/marcoguastalli/app-bookmarks
           images: ${{ env.REGISTRY }}/${{ github.repository }}
           tags: |
-            type=ref,event=branch
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=${{ steps.version.outputs.version }},enable=${{ github.ref_type == 'branch' }}
+            type=ref,event=branch,enable=${{ github.ref_type == 'branch' }}
+            type=semver,pattern={{version}},enable=${{ github.ref_type == 'tag' }}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ github.ref_type == 'tag' }}
             type=sha
             type=raw,value=latest,enable=${{ github.ref_type == 'tag' }}
 
