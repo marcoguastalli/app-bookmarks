@@ -101,9 +101,28 @@ then copy `dist` into the Bun/Hono runtime as `./public`).
 - **This branch** → `ghcr.io/marcoguastalli/app-bookmarks` (single image; SPA + API)
 - **`main`** → `ghcr.io/marcoguastalli/app-bookmarks-api` + `…-frontend` (+ nginx)
 
-Publishing is done by CI (`.github/workflows/docker-publish.yml`), which sets up
-QEMU + Buildx on the GitHub runner and pushes a multi-arch manifest
-(amd64 + arm64). On this branch it triggers on `v*` tags; the first release is the
-git tag `v1.0.0-no-nginx` → image tags `1.0.0-no-nginx`, `latest`, `sha-<commit>`.
-`release.sh` is a local/manual alternative (needs local Buildx + a `write:packages`
-PAT). See the README's "Migration: dropping nginx" section for the full rationale.
+**CI publishes on every push to `no-nginx`** (the default branch). See [Versioning](#versioning)
+for how image tags are assigned. The workflow (`.github/workflows/docker-publish.yml`) sets up
+QEMU + Buildx on the GitHub runner and pushes a multi-arch manifest (amd64 + arm64).
+
+## Versioning
+
+**Branch pushes** (`no-nginx`) get **auto-versioned tags**: `MAJOR.MINOR.PATCH` where:
+- `MAJOR.MINOR` = from the `VERSION` file (e.g., `1.2`)
+- `PATCH` = commit count since repo start
+- Result: every push gets the next semver (e.g., `1.2.31`, `1.2.32`, `1.2.33`, …)
+
+To bump `MAJOR.MINOR`, edit the `VERSION` file (e.g., `2.0`); the next push will tag `2.0.X`.
+
+**Git tags** still trigger **named releases**: pushing `v2.0.0` creates tags `2.0.0`, `2.0`, and `latest`.
+
+Examples:
+```bash
+# Every branch push auto-tags: 1.2.31, 1.2.32, 1.2.33, ...
+docker pull ghcr.io/marcoguastalli/app-bookmarks:1.2.31
+
+# Cut a release: git tag v2.0.0 && git push origin v2.0.0
+# → creates tags: 2.0.0, 2.0, latest, sha-<commit>
+docker pull ghcr.io/marcoguastalli/app-bookmarks:2.0.0
+docker pull ghcr.io/marcoguastalli/app-bookmarks:latest
+```

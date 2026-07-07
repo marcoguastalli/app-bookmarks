@@ -59,7 +59,7 @@ Wait for the health check to pass (~15–30 seconds).
 
 `docker compose up --build` builds the `app-bookmarks` image locally. To run the
 **pre-built image** instead, pull it from GitHub Container Registry. CI publishes
-it on `v*` tags — see [`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml):
+every push to `no-nginx` with an **auto-versioned tag** — see [`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml):
 
 | Image | Registry path | Visibility |
 |-------|---------------|------------|
@@ -67,13 +67,14 @@ it on `v*` tags — see [`.github/workflows/docker-publish.yml`](.github/workflo
 | API (main branch) | `ghcr.io/marcoguastalli/app-bookmarks-api` | public |
 | Frontend (main branch) | `ghcr.io/marcoguastalli/app-bookmarks-frontend` | public |
 
-Tags for the single image: `latest`, `1.0.0-no-nginx` (first release), and
-`sha-<commit>`. The image is **multi-arch** (linux/amd64 + linux/arm64), so it
-pulls natively on both x86 and Apple Silicon — no `--platform` flag needed. Pin a
-version in production instead of `latest`:
+**Every push to `no-nginx`** gets a semantic version tag (e.g., `1.2.31`, `1.2.32`, …).
+Cutting a **git tag** (e.g., `v2.0.0`) creates a named release with `2.0`, `2.0.0`, and `latest`.
+The image is **multi-arch** (linux/amd64 + linux/arm64), so it pulls natively on both
+x86 and Apple Silicon — no `--platform` flag needed. Pin a specific version in production:
 
 ```bash
-docker pull ghcr.io/marcoguastalli/app-bookmarks:1.0.0-no-nginx
+docker pull ghcr.io/marcoguastalli/app-bookmarks:1.2.31  # from branch push
+docker pull ghcr.io/marcoguastalli/app-bookmarks:2.0.0   # from git tag v2.0.0
 ```
 
 The packages are **public** — no `docker login` needed to pull.
@@ -198,18 +199,36 @@ docker network rm bookmarks-net
 
 ## Publishing Images
 
-**CI is the primary path.** [`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml)
-builds and pushes the image on `v*` tags (and manual `workflow_dispatch`). It sets
-up QEMU + Buildx **on the GitHub runner** and authenticates with the built-in
-`GITHUB_TOKEN` — nothing runs on your machine, and no PAT is needed. To cut a
-release:
+**CI publishes on every push to `no-nginx`** (the default branch). Every commit
+automatically gets a **semantic version tag** (e.g., `1.2.31`, `1.2.32`, …). The workflow
+(`.github/workflows/docker-publish.yml`) sets up QEMU + Buildx **on the GitHub runner**
+and authenticates with the built-in `GITHUB_TOKEN` — nothing runs on your machine, and
+no PAT is needed.
+
+### Versioning: Branch Pushes (Auto-versioned)
+
+The `VERSION` file contains `MAJOR.MINOR` (e.g., `1.2`). The workflow computes
+`PATCH = commit count`, so each push gets the next version:
 
 ```bash
-git tag -a v1.1.0 -m "…" && git push origin v1.1.0   # → image tags 1.1.0, 1.1, latest
+# Every push to no-nginx auto-tags: 1.2.31, 1.2.32, 1.2.33, …
+docker pull ghcr.io/marcoguastalli/app-bookmarks:1.2.31
+docker pull ghcr.io/marcoguastalli/app-bookmarks:1.2.32  # next push
 ```
 
-The first release on this branch was the git tag `v1.0.0-no-nginx`
-(→ `1.0.0-no-nginx`, `latest`, `sha-<commit>`).
+To bump `MAJOR.MINOR`, edit `VERSION` (e.g., `2.0`); the next push will tag `2.0.X`.
+
+### Versioning: Git Tags (Named Releases)
+
+Push a semver git tag to create a **named release** with `latest`:
+
+```bash
+git tag -a v2.0.0 -m "Release 2.0.0" && git push origin v2.0.0
+# → image tags: 2.0.0, 2.0, latest, sha-<commit>
+
+docker pull ghcr.io/marcoguastalli/app-bookmarks:2.0.0
+docker pull ghcr.io/marcoguastalli/app-bookmarks:latest
+```
 
 **`release.sh` is a local/manual alternative.** It builds from the repo-root
 `Dockerfile` and pushes the single `ghcr.io/marcoguastalli/app-bookmarks` image as
@@ -371,7 +390,7 @@ bun run test:e2e      # Playwright E2E (Chromium + Firefox)
 
 ## Production Deployment
 
-1. **Pin the image version** — use `ghcr.io/marcoguastalli/app-bookmarks:1.0.0-no-nginx`, not `:latest`
+1. **Pin the image version** — every push to `no-nginx` auto-versions (e.g., `1.2.31`); use a specific version like `ghcr.io/marcoguastalli/app-bookmarks:1.2.31`, never `:latest` or `:no-nginx` in production
 2. **Secrets management** — use `.env.production` (not in repo)
 3. **Volume persistence** — DB and pgAdmin data are **host bind mounts**
    (`POSTGRES_DATA_DIR` / `PGADMIN_DATA_DIR`, default `~/opt/docker/bookmarks-data/*`).
