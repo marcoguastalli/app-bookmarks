@@ -131,10 +131,10 @@ To persist the database on the host instead of a named volume, swap the postgres
 
 ### Plain `docker run` (no Compose) with a fresh host-mounted DB
 
-> **Shortcut:** [`docker-start.sh`](docker-start.sh) does everything below for you —
-> `./docker-start.sh` (add `--seed` for sample data, `--fresh` to wipe first,
+> **Shortcut:** [`docker-control.sh`](docker-control.sh) does everything below for you —
+> `./docker-control.sh` (add `--seed` for sample data, `--fresh` to wipe first,
 > `--down` to tear down). Override defaults via env vars, e.g.
-> `DATA_DIR=~/temp/mybm PORT=8080 ./docker-start.sh`.
+> `DATA_DIR=~/temp/mybm PORT=8080 ./docker-control.sh`.
 
 The `app-bookmarks` image is **not** a self-contained `docker run` — it's the
 SPA + API and still needs a PostgreSQL container to talk to. To spin up a fresh
@@ -502,7 +502,7 @@ Known gaps, in rough priority order — not blocking, but worth doing:
 
 - [ ] **Automate dependency/image bumps** — add [Renovate](https://docs.renovatebot.com/)
   (or Dependabot with the `docker` ecosystem) to watch the image tags pinned in
-  `Dockerfile`, `docker-compose.yml`, `docker-start.sh`, and the README
+  `Dockerfile`, `docker-compose.yml`, `docker-control.sh`, and the README
   (`postgres`, `dpage/pgadmin4`, `oven/bun`). The 2026-07 upgrade round
   (Postgres 17→18, pgAdmin 9.12→9.16, Bun 1.2.5→1.3.14) was done manually and
   the images had drifted for months; a bot would have raised each bump as a PR.

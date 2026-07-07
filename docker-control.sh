@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
 #
-# docker-start.sh — run the published single app-bookmarks image (SPA + API)
+# docker-control.sh — manage the published single app-bookmarks image (SPA + API)
 # together with a PostgreSQL container whose data lives in a host directory.
 #
 # The app runs its DB migrations on startup, so a fresh (empty) data dir gives you
 # a clean schema with no data. Everything is plain `docker run` — no Compose.
 #
 # Usage:
-#   ./docker-start.sh                 # start db + app (data in ~/temp/new-bookmarks)
-#   ./docker-start.sh --seed          # start, then load sample data
-#   ./docker-start.sh --fresh         # wipe the data dir first, then start (⚠ deletes data)
-#   ./docker-start.sh --down          # stop & remove the containers + network (keeps data)
-#   ./docker-start.sh -h | --help
+#   ./docker-control.sh                 # start db + app (data in ~/temp/new-bookmarks)
+#   ./docker-control.sh --seed          # start, then load sample data
+#   ./docker-control.sh --fresh         # wipe the data dir first, then start (⚠ deletes data)
+#   ./docker-control.sh --down          # stop & remove the containers + network (keeps data)
+#   ./docker-control.sh -h | --help
 #
 # Override any setting via env vars, e.g.:
-#   DATA_DIR=~/temp/mybm PORT=8080 DB_PASSWORD=s3cret ./docker-start.sh
+#   DATA_DIR=~/temp/mybm PORT=8080 DB_PASSWORD=s3cret ./docker-control.sh
 #
 set -euo pipefail
 
@@ -42,12 +42,12 @@ while [[ $# -gt 0 ]]; do
     --fresh)     FRESH=true ;;
     --down)      DOWN=true ;;
     -h|--help)   sed -n '2,/^set -euo/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//; /^set -euo/d'; exit 0 ;;
-    *)           echo "docker-start.sh: unknown argument '$1' (try --help)" >&2; exit 2 ;;
+    *)           echo "docker-control.sh: unknown argument '$1' (try --help)" >&2; exit 2 ;;
   esac
   shift
 done
 
-command -v docker >/dev/null || { echo "docker-start.sh: docker not found" >&2; exit 1; }
+command -v docker >/dev/null || { echo "docker-control.sh: docker not found" >&2; exit 1; }
 
 # Expand a leading ~ in DATA_DIR (env vars aren't tilde-expanded by the shell).
 DATA_DIR="${DATA_DIR/#\~/$HOME}"
@@ -127,4 +127,4 @@ fi
 echo
 echo "✓ up — open http://localhost:$PORT   (API: /api, Swagger: /api/docs)"
 echo "  logs:     docker logs -f $APP_CONTAINER"
-echo "  stop/rm:  ./docker-start.sh --down   (keeps data in $DATA_DIR)"
+echo "  stop/rm:  ./docker-control.sh --down   (keeps data in $DATA_DIR)"
