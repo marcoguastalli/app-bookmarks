@@ -12,13 +12,14 @@ Self-hosted bookmarks manager: organize URLs into nested folders, deduplicate by
 ```bash
 docker compose up --build        # all services at http://localhost
 docker compose down -v           # stop and remove volumes
+docker compose -f docker-compose.yml -f docker-compose.shared-db.yml up api --no-deps  # use the shared Postgres in my_docker/postgres/src/v1 instead (see README "Shared Postgres mode")
 ```
 
 ### Local development (outside Docker)
 This branch runs as a **single process**: the API serves the built SPA, so there
 is no separate Vite dev server (no HMR). Rebuild the frontend when it changes.
 ```bash
-docker compose up postgres -d               # start only PostgreSQL
+docker compose -f docker-compose.test.yml up -d   # ephemeral local/test Postgres (main-stack postgres has no host port)
 
 cd frontend && bun run build                 # build SPA → frontend/dist
 cd ../api && PUBLIC_DIR=../frontend/dist bun run dev   # SPA + API on :3000
@@ -82,7 +83,7 @@ serving. Immutable caching is applied to `/assets/*` (content-hashed files) and
 
 **Favicon fetch**: Non-blocking, fires on bookmark creation, populates `favicon_url`.
 
-**Testing split**: Unit tests (`tests/unit/`) use no DB; integration tests (`tests/integration/`) use a separate `bookmarks_test` DB loaded from `api/.env.test` (via `bunfig.toml`).
+**Testing split**: Unit tests (`tests/unit/`) use no DB; integration tests (`tests/integration/`) use a separate `bookmarks_test` DB loaded from `api/.env.test` (via `bunfig.toml`). Both `bookmarks` (local dev) and `bookmarks_test` (integration) live in the ephemeral Postgres started by `docker-compose.test.yml` — the main-stack postgres in `docker-compose.yml` has no host port.
 
 ## Environment Variables
 
@@ -90,7 +91,7 @@ Copy `api/.env.example` → `api/.env` for local dev. Copy `.env.example` → `.
 
 Key vars: `DATABASE_URL`, `PORT` (default 3000), `NODE_ENV`, `MAX_FOLDER_DEPTH` (default 10), `LOG_LEVEL`, `PUBLIC_DIR` (built SPA to serve; default `./public`, set to `../frontend/dist` for local dev).
 
-For integration tests, create `api/.env.test` pointing to a separate `bookmarks_test` database.
+For integration tests, create `api/.env.test` pointing to a separate `bookmarks_test` database (see `docker-compose.test.yml`).
 
 ## Deployment & Images
 

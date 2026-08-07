@@ -3,10 +3,11 @@ services:
     image: postgres:18.4-alpine3.24
     container_name: docker-postgres
     restart: unless-stopped
-    ports:
-      # bound to localhost only — for psql/pgAdmin on this machine; the app
-      # reaches postgres over the internal network
-      - "127.0.0.1:5432:5432"
+    # No host port: reachable only inside app-network. Local tooling (psql,
+    # pgAdmin outside Docker, `bun run dev`, integration tests) uses the
+    # separate ephemeral stack in docker-compose.test.yml instead.
+    security_opt:
+      - no-new-privileges:true
     volumes:
       # Host bind mount → survives `docker compose down -v` and even
       # `colima delete`, and is visible to Time Machine.
@@ -38,7 +39,11 @@ services:
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:-CHANGE_ME}
       PGADMIN_CONFIG_SERVER_MODE: 'False'
     ports:
-      - "${PGADMIN_PORT:-5050}:80"
+      # pgadmin listens on 8080 (not 80): with no-new-privileges it detects a
+      # restricted security context and skips the root→port-80 setup.
+      - "${PGADMIN_PORT:-5050}:8080"
+    security_opt:
+      - no-new-privileges:true
     networks:
       - app-network
     depends_on:

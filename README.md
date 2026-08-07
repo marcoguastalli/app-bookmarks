@@ -55,6 +55,39 @@ docker compose --profile dev up --build
 
 Wait for the health check to pass (~15–30 seconds).
 
+`postgres` itself has no host port — it's reachable only inside `app-network`.
+In pgAdmin, register a server pointing at host `postgres`, port `5432`, not
+`localhost`.
+
+**Ports:** only `80` (app, `APP_PORT`) is published by default, bound to
+`0.0.0.0` — reachable from your LAN/Tailscale as soon as your host firewall
+allows incoming connections to Docker, nothing else to configure. `5050`
+(pgAdmin) only opens with `--profile dev`. Don't forward `5050`/`5432`
+(or the shared instance's, see "Shared Postgres mode" below) beyond your
+LAN — they give raw DB/admin access with whatever dev password is in `.env`.
+
+### Shared Postgres mode
+
+Instead of this repo's own postgres, you can point the api at a single
+Postgres/pgAdmin instance shared across multiple projects on the same
+machine — see `my_docker/postgres/src/v1`. One-time setup: create this app's
+database on the shared instance (migrations run automatically on startup, so
+an empty database is enough):
+
+```bash
+docker exec -it postgres psql -U postgres -c "CREATE DATABASE bookmarks;"
+```
+
+Then, instead of `docker compose up`:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.shared-db.yml up api --no-deps
+```
+
+`--no-deps` is required — otherwise Compose still starts this repo's own
+`postgres`. Set `SHARED_POSTGRES_*` in `.env` if your shared instance's
+credentials or database name differ from the defaults (see `.env.example`).
+
 ## Running from the Published Image (GHCR)
 
 `docker compose up --build` builds the `app-bookmarks` image locally. To run the
@@ -360,7 +393,9 @@ This branch runs as a **single process** — the API serves the built SPA, so th
 is no Vite dev server (no HMR). Rebuild the frontend when it changes.
 
 ```bash
-docker compose up postgres -d               # start only PostgreSQL
+# Start the ephemeral local/test Postgres (main-stack postgres has no host
+# port, so this is what `bun run dev` and the integration tests connect to)
+docker compose -f docker-compose.test.yml up -d
 
 # Build the SPA, then run the app (serves SPA + API on :3000)
 cd frontend && bun run build
@@ -375,7 +410,7 @@ cd api
 bun run seed          # seed DB with sample data
 bun test              # all tests
 bun test:unit         # no DB required
-bun test:integration  # requires PostgreSQL
+bun test:integration  # requires docker-compose.test.yml running (bookmarks_test DB)
 ```
 
 Database migrations run automatically on startup (see `api/src/db/migrate.ts`).
@@ -396,7 +431,7 @@ bun run test:e2e      # Playwright E2E (Chromium + Firefox)
    (`POSTGRES_DATA_DIR` / `PGADMIN_DATA_DIR`, default `~/opt/docker/bookmarks-data/*`).
    They survive `docker compose down -v` and even a Docker/Colima VM rebuild,
    and can be backed up with normal file tools (Time Machine, rsync)
-4. **Network isolation** — services on the `app-network` bridge; only port 80 exposed externally (postgres is bound to `127.0.0.1` for local tooling)
+4. **Network isolation** — services on the `app-network` bridge; only port 80 (app) and, when the `dev` profile is enabled, 5050 (pgAdmin) are exposed externally. `postgres` has no host port at all — reachable only inside `app-network`. Local tooling (psql, `bun run dev`, integration tests) uses the separate ephemeral stack in `docker-compose.test.yml` instead
 5. **Restart policy** — `unless-stopped` (automatic recovery on crash)
 
 ### Production Checklist
