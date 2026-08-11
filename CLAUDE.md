@@ -10,7 +10,7 @@ Self-hosted bookmarks manager: organize URLs into nested folders, deduplicate by
 
 ### Running (recommended: Docker)
 ```bash
-docker compose up --build        # all services at http://localhost
+docker compose up --build        # all services at http://localhost:3000
 docker compose down -v           # stop and remove volumes
 docker compose -f docker-compose.yml -f docker-compose.shared-db.yml up api --no-deps  # use the shared Postgres in my_docker/postgres/src/v1 instead (see README "Shared Postgres mode")
 ```

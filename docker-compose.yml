@@ -64,7 +64,7 @@ services:
       MAX_FOLDER_DEPTH: ${MAX_FOLDER_DEPTH:-10}
       LOG_LEVEL: ${LOG_LEVEL:-info}
     ports:
-      - "${APP_PORT:-80}:3000"
+      - "${APP_PORT:-3000}:3000"
     networks:
       - app-network
     depends_on:

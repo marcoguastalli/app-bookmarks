@@ -20,7 +20,7 @@ set -euo pipefail
 
 # ── config (override via env) ────────────────────────────────────────────────
 DATA_DIR="${DATA_DIR:-$HOME/temp/new-bookmarks}"
-PORT="${PORT:-80}"
+PORT="${PORT:-3000}"
 IMAGE="${IMAGE:-ghcr.io/marcoguastalli/app-bookmarks:1.0.0-no-nginx}"
 POSTGRES_IMAGE="${POSTGRES_IMAGE:-postgres:18.4-alpine3.24}"
 

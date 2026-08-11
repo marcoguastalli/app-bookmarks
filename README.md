@@ -47,9 +47,9 @@ docker compose up --build
 docker compose --profile dev up --build
 
 # 3. Access the app
-# App (SPA):  http://localhost
-# API:        http://localhost/api
-# Swagger:    http://localhost/api/docs
+# App (SPA):  http://localhost:3000
+# API:        http://localhost:3000/api
+# Swagger:    http://localhost:3000/api/docs
 # pgAdmin:    http://localhost:5050 (only with --profile dev)
 ```
 
@@ -59,7 +59,7 @@ Wait for the health check to pass (~15–30 seconds).
 In pgAdmin, register a server pointing at host `postgres`, port `5432`, not
 `localhost`.
 
-**Ports:** only `80` (app, `APP_PORT`) is published by default, bound to
+**Ports:** only `3000` (app, `APP_PORT`) is published by default, bound to
 `0.0.0.0` — reachable from your LAN/Tailscale as soon as your host firewall
 allows incoming connections to Docker, nothing else to configure. `5050`
 (pgAdmin) only opens with `--profile dev`. Don't forward `5050`/`5432`
@@ -146,7 +146,7 @@ services:
       PORT: 3000
       NODE_ENV: ${NODE_ENV:-production}
     ports:
-      - "80:3000"
+      - "3000:3000"
     networks: [app-network]
     depends_on:
       postgres:
@@ -195,11 +195,11 @@ docker run -d --name app-bookmarks \
   --network bookmarks-net \
   -e DATABASE_URL=postgresql://postgres:CHANGE_ME@bookmarks-db:5432/bookmarks \
   -e NODE_ENV=production \
-  -p 80:3000 \
+  -p 3000:3000 \
   ghcr.io/marcoguastalli/app-bookmarks:1.0.0-no-nginx
 ```
 
-Then open **http://localhost**. The image is public, so no `docker login` needed.
+Then open **http://localhost:3000**. The image is public, so no `docker login` needed.
 
 Notes:
 - **Mount at `/var/lib/postgresql` (not `…/data`)** — the Postgres 18 image moved
@@ -210,7 +210,7 @@ Notes:
   `~/temp/new-bookmarks/18/docker/`.
 - **Change the password** (`CHANGE_ME`) in both commands — it must match in the DB
   and in `DATABASE_URL`.
-- **Port** — using `-p 80:3000`; if 80 is taken use e.g. `-p 8080:3000` →
+- **Port** — using `-p 3000:3000`; if 3000 is taken use e.g. `-p 8080:3000` →
   http://localhost:8080.
 - **Seed data** — none (clean DB). Load the sample data with
   `docker exec -it app-bookmarks bun run seed`.
@@ -219,7 +219,7 @@ Verify / logs:
 
 ```bash
 docker logs -f app-bookmarks     # "listening on port 3000" + "migrations up to date"
-curl http://localhost/health
+curl http://localhost:3000/health
 ```
 
 Teardown (keeps the DB files on disk):
@@ -304,7 +304,7 @@ This branch collapses that to **one** image:
   is the Bun/Hono runtime with `dist` copied to `./public` (`PUBLIC_DIR`).
 - **`docker-compose.yml`** — `nginx` and `frontend` services removed; the `api`
   service builds the root Dockerfile, is named `app-bookmarks`, and publishes on
-  `80:3000`.
+  `3000:3000`.
 - **Removed files:** `nginx.conf`, `frontend/Dockerfile`, `frontend/nginx.conf`,
   and the per-service `.dockerignore`s (superseded by a root `.dockerignore`).
 - **`.github/workflows/docker-publish.yml`** — dropped the api/frontend matrix;
@@ -337,7 +337,7 @@ PGADMIN_DEFAULT_PASSWORD=your_pass # dev only
 ```
 ┌─────────────────────────────────────┐
 │         User Browser                 │
-│      http://localhost:80             │
+│      http://localhost:3000           │
 └─────────────────┬───────────────────┘
                   │
         ┌─────────▼──────────────────┐
@@ -372,7 +372,7 @@ PGADMIN_DEFAULT_PASSWORD=your_pass # dev only
   `api/src` and `--from=frontend-build /fe/dist` → `./public`. Runs as the
   non-root `bun` user.
 - **Entrypoint**: `CMD ["bun", "run", "src/index.ts"]`
-- **Port**: 3000 (published as `80:3000` in Compose)
+- **Port**: 3000 (published as `3000:3000` in Compose)
 - **Healthcheck**: `GET /health`, 15s interval, 3 retries
 - **`PUBLIC_DIR=./public`** set in the image so Hono knows where the SPA lives.
 
@@ -431,7 +431,7 @@ bun run test:e2e      # Playwright E2E (Chromium + Firefox)
    (`POSTGRES_DATA_DIR` / `PGADMIN_DATA_DIR`, default `~/opt/docker/bookmarks-data/*`).
    They survive `docker compose down -v` and even a Docker/Colima VM rebuild,
    and can be backed up with normal file tools (Time Machine, rsync)
-4. **Network isolation** — services on the `app-network` bridge; only port 80 (app) and, when the `dev` profile is enabled, 5050 (pgAdmin) are exposed externally. `postgres` has no host port at all — reachable only inside `app-network`. Local tooling (psql, `bun run dev`, integration tests) uses the separate ephemeral stack in `docker-compose.test.yml` instead
+4. **Network isolation** — services on the `app-network` bridge; only port 3000 (app) and, when the `dev` profile is enabled, 5050 (pgAdmin) are exposed externally. `postgres` has no host port at all — reachable only inside `app-network`. Local tooling (psql, `bun run dev`, integration tests) uses the separate ephemeral stack in `docker-compose.test.yml` instead
 5. **Restart policy** — `unless-stopped` (automatic recovery on crash)
 
 ### Production Checklist
@@ -512,7 +512,7 @@ docker compose restart app
 # Check the single app image's logs — it serves both SPA and API
 docker compose logs app | tail -50
 # API is mounted under /api; verify directly:
-curl http://localhost/api/folders/tree
+curl http://localhost:3000/api/folders/tree
 ```
 
 ### Database migrations failed?
@@ -524,28 +524,28 @@ docker compose down && docker compose up
 
 ## API Endpoints
 
-See Swagger UI: `http://localhost/api/docs`
+See Swagger UI: `http://localhost:3000/api/docs`
 
 ```bash
 # Health check (root, for the container probe)
-curl http://localhost/health
+curl http://localhost:3000/health
 
 # List all folders
-curl http://localhost/api/folders
+curl http://localhost:3000/api/folders
 
 # Get folder tree (nested)
-curl http://localhost/api/folders/tree
+curl http://localhost:3000/api/folders/tree
 
 # Create folder
-curl -X POST http://localhost/api/folders \
+curl -X POST http://localhost:3000/api/folders \
   -H "Content-Type: application/json" \
   -d '{"name":"Work","parentId":null}'
 
 # Export bookmarks
-curl "http://localhost/api/export?folderIds=<uuid>" -o bookmarks.html
+curl "http://localhost:3000/api/export?folderIds=<uuid>" -o bookmarks.html
 
 # Import bookmarks
-curl -X POST http://localhost/api/import \
+curl -X POST http://localhost:3000/api/import \
   -F "file=@bookmarks.html" \
   -F "targetFolderId=<uuid>"
 ```
